@@ -4,16 +4,21 @@
 
 // Dynamic year
 document.getElementById('year').textContent = new Date().getFullYear();
+
 // ========== DYNAMIC PATH HELPER ==========
 const getBasePath = () => {
     // GitHub Pages
     if (window.location.hostname === 'sarahadevelopers.github.io') {
-        return '/rentspace';
+        return '/rentspace-markeplace';   // ✅ corrected
     }
     // Local development
     return '';
 };
 const basePath = getBasePath();
+
+// API base URL – your live backend on Render
+const API_BASE = 'https://rentspace-markeplace.onrender.com/api';
+
 // ========== SPLASH SCREEN ==========
 function hideSplash() {
   setTimeout(() => {
@@ -153,21 +158,27 @@ function initMobileDropdowns() {
   });
 }
 
-// ========== LOAD FEATURED PROPERTIES ==========
+// ========== LOAD FEATURED PROPERTIES FROM RENDER API ==========
 async function loadFeaturedProperties() {
   try {
-    const response = await fetch(`${basePath}/data/properties.json`);
-    const properties = await response.json();
-    
-    const featured = properties.filter(p => p.isFeatured).slice(0, 4);
+    // Fetch properties from API, filter for featured ones
+    const response = await fetch(`${API_BASE}/properties?featured=true&limit=4`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const featured = data.properties || [];
     
     const featuredScroll = document.getElementById('featuredScroll');
-    if (featuredScroll && featured.length > 0) {
+    if (featuredScroll) {
+      if (featured.length === 0) {
+        featuredScroll.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Featured properties coming soon.</p>';
+        return;
+      }
+      
       featuredScroll.innerHTML = featured.map(prop => `
         <a href="${basePath}/property/${prop.slug}.html" class="featured-card">
           <img src="${prop.images?.[0] || `${basePath}/images/placeholder.jpg`}" alt="${prop.title}">
           <div class="featured-info">
-            <h4>${prop.title}</h4>
+            <h4>${escapeHtml(prop.title)}</h4>
             <p>${prop.estate} · KES ${prop.price.toLocaleString()}/mo</p>
           </div>
         </a>
@@ -175,7 +186,22 @@ async function loadFeaturedProperties() {
     }
   } catch (error) {
     console.error('Error loading featured properties:', error);
+    const featuredScroll = document.getElementById('featuredScroll');
+    if (featuredScroll) {
+      featuredScroll.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Unable to load featured properties.</p>';
+    }
   }
+}
+
+// Helper: escape HTML to prevent XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
 }
 
 // ========== INITIALIZE EVERYTHING ==========
@@ -184,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFeaturedProperties();
   hideSplash();
   initMobileDropdowns();
-  initHeroSlider(); // Initialize the premium hero slider
+  initHeroSlider();
 });
 
 // Re-initialize dropdowns on resize

@@ -1,11 +1,14 @@
 // ========== DYNAMIC PATH HELPER ==========
 const getBasePath = () => {
     if (window.location.hostname === 'sarahadevelopers.github.io') {
-        return '/rentspace';
+        return '/rentspace-markeplace';
     }
     return '';
 };
 const basePath = getBasePath();
+
+// API base URL – your live backend on Render
+const API_BASE = 'https://rentspace-markeplace.onrender.com/api';
 
 // Default placeholder image (working URL)
 const DEFAULT_IMAGE = 'https://placehold.co/600x400/1a1a1a/c9a45c?text=No+Image';
@@ -101,12 +104,18 @@ function updateCategoryCounts() {
         }
     }
     
-    document.getElementById('kitengelaCount').textContent = counts.kitengela || 0;
-    document.getElementById('ngongCount').textContent = counts.ngong || 0;
-    document.getElementById('syokimauCount').textContent = counts.syokimau || 0;
-    document.getElementById('karenCount').textContent = counts.karen || 0;
-    document.getElementById('kilimaniCount').textContent = counts.kilimani || 0;
-    document.getElementById('hurlinghamCount').textContent = counts.hurlingham || 0;
+    const kitengelaCount = document.getElementById('kitengelaCount');
+    if (kitengelaCount) kitengelaCount.textContent = counts.kitengela || 0;
+    const ngongCount = document.getElementById('ngongCount');
+    if (ngongCount) ngongCount.textContent = counts.ngong || 0;
+    const syokimauCount = document.getElementById('syokimauCount');
+    if (syokimauCount) syokimauCount.textContent = counts.syokimau || 0;
+    const karenCount = document.getElementById('karenCount');
+    if (karenCount) karenCount.textContent = counts.karen || 0;
+    const kilimaniCount = document.getElementById('kilimaniCount');
+    if (kilimaniCount) kilimaniCount.textContent = counts.kilimani || 0;
+    const hurlinghamCount = document.getElementById('hurlinghamCount');
+    if (hurlinghamCount) hurlinghamCount.textContent = counts.hurlingham || 0;
 }
 
 // Render blog posts with pagination
@@ -123,6 +132,8 @@ function renderBlogPosts() {
     const blogGrid = document.getElementById('blogGrid');
     const paginationDiv = document.getElementById('pagination');
     
+    if (!blogGrid) return;
+    
     if (paginatedPosts.length === 0) {
         blogGrid.innerHTML = `
             <div style="grid-column: 1/-1; text-align: center; padding: 60px;">
@@ -130,7 +141,7 @@ function renderBlogPosts() {
                 <h3>No posts found</h3>
             </div>
         `;
-        paginationDiv.style.display = 'none';
+        if (paginationDiv) paginationDiv.style.display = 'none';
         return;
     }
     
@@ -152,6 +163,8 @@ function renderBlogPosts() {
             </a>
         `;
     }).join('');
+    
+    if (!paginationDiv) return;
     
     if (totalPages <= 1) {
         paginationDiv.style.display = 'none';
@@ -204,6 +217,7 @@ function renderBlogPosts() {
 function renderPopularPosts() {
     const popular = [...allBlogPosts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 3);
     const container = document.getElementById('popularPosts');
+    if (!container) return;
     if (popular.length === 0) {
         container.innerHTML = '<p style="color: var(--text-muted);">No posts yet</p>';
         return;
@@ -277,9 +291,11 @@ function initSearch() {
             const blogGrid = document.getElementById('blogGrid');
             const paginationDiv = document.getElementById('pagination');
             
+            if (!blogGrid) return;
+            
             if (searched.length === 0) {
                 blogGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px;"><i class="fas fa-search" style="font-size:48px;color:var(--gold);opacity:0.5;margin-bottom:20px;"></i><h3>No results found for "${escapeHtml(searchTerm)}"</h3></div>`;
-                paginationDiv.style.display = 'none';
+                if (paginationDiv) paginationDiv.style.display = 'none';
             } else {
                 const paginated = searched.slice(0, postsPerPage);
                 blogGrid.innerHTML = paginated.map(post => {
@@ -300,7 +316,7 @@ function initSearch() {
                         </a>
                     `;
                 }).join('');
-                paginationDiv.style.display = 'none';
+                if (paginationDiv) paginationDiv.style.display = 'none';
             }
         }, 300);
     });
@@ -317,13 +333,13 @@ function escapeHtml(str) {
     });
 }
 
-// Load posts from JSON file
+// Load posts from Render API
 async function loadPosts() {
     const loadingSpinner = document.getElementById('loadingSpinner');
     const blogGrid = document.getElementById('blogGrid');
     
     loadingTimeout = setTimeout(() => {
-        if (isLoading) {
+        if (isLoading && loadingSpinner) {
             loadingSpinner.innerHTML = `
                 <div style="text-align: center;">
                     <div class="spinner"></div>
@@ -336,16 +352,17 @@ async function loadPosts() {
     isLoading = true;
     
     try {
-        const response = await fetch(`${basePath}/data/posts.json`);
+        const response = await fetch(`${API_BASE}/posts?limit=100`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        allBlogPosts = data.posts || [];
         
-        allBlogPosts = await response.json();
-        console.log(`✅ Loaded ${allBlogPosts.length} blog posts`);
+        console.log(`✅ Loaded ${allBlogPosts.length} blog posts from API`);
         
         clearTimeout(loadingTimeout);
         
-        loadingSpinner.style.display = 'none';
-        blogGrid.style.display = 'grid';
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
+        if (blogGrid) blogGrid.style.display = 'grid';
         
         updateCategoryCounts();
         renderBlogPosts();
@@ -354,16 +371,18 @@ async function loadPosts() {
         initSearch();
         
     } catch (error) {
-        console.error('Error loading posts:', error);
+        console.error('Error loading posts from API:', error);
         clearTimeout(loadingTimeout);
-        loadingSpinner.innerHTML = `
-            <div style="text-align: center;">
-                <i class="fas fa-exclamation-circle" style="font-size: 48px; color: var(--gold); margin-bottom: 20px;"></i>
-                <h3>Unable to load blog posts</h3>
-                <p style="color: var(--text-muted);">Please refresh the page or try again later.</p>
-                <button onclick="location.reload()" style="margin-top: 1rem; background: var(--gold); color: #000; border: none; padding: 10px 24px; border-radius: 40px; cursor: pointer;">Retry</button>
-            </div>
-        `;
+        if (loadingSpinner) {
+            loadingSpinner.innerHTML = `
+                <div style="text-align: center;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 48px; color: var(--gold); margin-bottom: 20px;"></i>
+                    <h3>Unable to load blog posts</h3>
+                    <p style="color: var(--text-muted);">Please refresh the page or try again later.</p>
+                    <button onclick="location.reload()" style="margin-top: 1rem; background: var(--gold); color: #000; border: none; padding: 10px 24px; border-radius: 40px; cursor: pointer;">Retry</button>
+                </div>
+            `;
+        }
     } finally {
         isLoading = false;
     }

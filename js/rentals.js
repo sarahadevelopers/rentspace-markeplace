@@ -5,7 +5,7 @@
 const getBasePath = () => {
     // GitHub Pages
     if (window.location.hostname === 'sarahadevelopers.github.io') {
-        return '/rentspace';
+        return '/rentspace-markeplace';   // ← changed from '/rentspace'
     }
     // Local development
     return '';
@@ -316,7 +316,7 @@ function renderProperties() {
         const firstImage = images[0];
         
         return `
-            <a href="/property/${prop.slug}.html" class="property-card" data-property-id="${prop.id}">
+            <a href="${basePath}/property/${prop.slug}.html" class="property-card" data-property-id="${prop.id}">
                 <div class="card-image-wrapper">
                     <img class="card-image" src="${firstImage}" alt="${prop.title}" loading="lazy">
                     <div class="card-badge">${prop.type}</div>
@@ -325,11 +325,11 @@ function renderProperties() {
                 <div class="card-info">
                     <h3 class="card-title">${escapeHtml(prop.title)}</h3>
                     <div class="card-location">${prop.estate}, Nairobi</div>
-                    <div class="card-features">
-                        <span><i class="fas fa-bed"></i> ${prop.specs?.bedrooms || 0}</span>
-                        <span><i class="fas fa-bath"></i> ${prop.specs?.bathrooms || 0}</span>
-                        <span><i class="fas fa-car"></i> ${prop.specs?.parking || 0}</span>
-                    </div>
+                   <div class="card-features">
+    <span><i class="fas fa-bed"></i> ${prop.bedrooms || 0}</span>
+    <span><i class="fas fa-bath"></i> ${prop.bathrooms || 0}</span>
+    <span><i class="fas fa-car"></i> ${prop.parking || 0}</span>
+</div>
                 </div>
                 <div class="card-cta">View Details</div>
             </a>
@@ -602,33 +602,61 @@ if (applyBtn) {
 }
 
 // ========== LOAD PROPERTIES ==========
+// ========== LOAD PROPERTIES FROM LIVE RENDER API ==========
 async function loadProperties() {
     try {
-        const response = await fetch(`${basePath}/data/properties.json`);
-        allProperties = await response.json();
+        // Show skeleton loader while fetching
+        if (skeletonLoader) skeletonLoader.style.display = 'flex';
+        
+        const response = await fetch('https://rentspace-markeplace.onrender.com/api/properties?limit=200');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        // The API returns { success, count, total, properties: [...] }
+        const propertiesFromAPI = data.properties || [];
+        
+        // Transform API properties to match the format expected by the rest of the code
+        allProperties = propertiesFromAPI.map(prop => ({
+            id: prop._id,
+            title: prop.title,
+            slug: prop.slug,
+            estate: prop.estate,
+            price: Number(prop.price) || 0,  // safety: ensure price is a number
+            // Map type: use propertyType or listingType
+            type: prop.propertyType || (prop.listingType === 'short_term' ? 'Short-Stay' : 'Long-Term'),
+            // Keep images array
+            images: prop.images || [],
+            // Use individual fields directly (no nested specs object)
+            bedrooms: prop.bedrooms || 0,
+            bathrooms: prop.bathrooms || 0,
+            parking: prop.parking || 0,
+            description: prop.description || '',
+            listingType: prop.listingType,
+            status: prop.status
+        }));
         
         if (skeletonLoader) skeletonLoader.style.display = 'none';
         ensurePaginationContainer();
         
+        // Apply any filters that are currently set (including URL location)
         currentFilteredProperties = [...allProperties];
-        
         renderProperties();
         initChipListeners();
         addResetButton();
-        
         applyFilterFromURL();
         
     } catch (error) {
-        console.error('Error loading properties:', error);
+        console.error('Error loading properties from API:', error);
         if (skeletonLoader) skeletonLoader.style.display = 'none';
         if (emptyState) {
             emptyState.style.display = 'block';
             const emptyTitle = emptyState.querySelector('h3');
             if (emptyTitle) emptyTitle.textContent = 'Unable to Load Properties';
+            const emptyText = emptyState.querySelector('p');
+            if (emptyText) emptyText.textContent = 'Please check back later.';
         }
     }
 }
-
 // Clean up intervals on page unload
 window.addEventListener('beforeunload', () => {
     stopAllImageShuffling();

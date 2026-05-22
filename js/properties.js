@@ -5,7 +5,7 @@
 const getBasePath = () => {
     // GitHub Pages
     if (window.location.hostname === 'sarahadevelopers.github.io') {
-        return '/rentspace';
+        return '/rentspace-markeplace';
     }
     // Local development
     return '';
@@ -240,12 +240,18 @@ function trackUserInteraction() {
 }
 
 // Dynamic recommendations enhancement
-async function loadMoreRecommendations(currentEstate, currentId) {
+async function loadMoreRecommendations(currentEstate, currentSlug) {
   try {
-    const response = await fetch(`${basePath}/data/properties.json`);
-    const properties = await response.json();
+    // Use your live backend API
+    const response = await fetch('https://rentspace-markeplace.onrender.com/api/properties');
+    const data = await response.json();
+    
+    // API returns { success: true, count: ..., properties: [...] }
+    const properties = data.properties || [];
+    
+    // Filter by estate, exclude current property using slug, and only approved ones
     const similar = properties
-      .filter(p => p.estate === currentEstate && p.id !== currentId)
+      .filter(p => p.estate === currentEstate && p.slug !== currentSlug && p.status === 'approved')
       .slice(0, 4);
     
     const recContainer = document.querySelector('.recommendation-cards');
@@ -259,15 +265,21 @@ async function loadMoreRecommendations(currentEstate, currentId) {
             <img src="${prop.images?.[0] || `${basePath}/images/placeholder.jpg`}" alt="${prop.title}" loading="lazy">
           </div>
           <div class="rec-card-info">
-            <h4>${prop.title}</h4>
+            <h4>${escapeHtml(prop.title)}</h4>
             <p>${prop.estate} · KES ${prop.price.toLocaleString()} / mo</p>
           </div>
         `;
         recContainer.appendChild(card);
       });
+    } else if (recContainer && similar.length === 0) {
+      recContainer.innerHTML = '<p class="no-rec">More properties coming soon.</p>';
     }
   } catch (error) {
-    console.error('Error loading recommendations:', error);
+    console.error('Error loading recommendations from API:', error);
+    const recContainer = document.querySelector('.recommendation-cards');
+    if (recContainer) {
+      recContainer.innerHTML = '<p class="no-rec">Unable to load recommendations. Please check back later.</p>';
+    }
   }
 }
 
@@ -381,8 +393,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load recommendations if needed
   const recContainer = document.querySelector('.recommendation-cards');
   if (recContainer && currentProperty && recContainer.children.length === 0) {
-    const currentId = parseInt(new URLSearchParams(window.location.search).get('id'));
-    loadMoreRecommendations(currentProperty.estate, currentId);
+    const currentSlug = getPropertySlugFromURL();  // you already have this function
+loadMoreRecommendations(currentProperty.estate, currentSlug);
   }
 });
 
