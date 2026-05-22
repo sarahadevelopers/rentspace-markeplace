@@ -1,121 +1,43 @@
-const http = require('http');
-const fs = require('fs');
+// server.js
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
 const path = require('path');
+const mongoose = require('mongoose');
 
-const PORT = 3000;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Paths that should be served with /rentspace prefix (matching GitHub Pages)
-const GITHUB_PAGES_PREFIX = '/rentspace';
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-const server = http.createServer((req, res) => {
-    // Get the requested URL
-    let reqUrl = req.url;
-    
-    // Remove query parameters
-    if (reqUrl.includes('?')) {
-        reqUrl = reqUrl.split('?')[0];
-    }
-    
-    // Handle /rentspace prefix (GitHub Pages style)
-    let cleanPath = reqUrl;
-    if (cleanPath.startsWith(GITHUB_PAGES_PREFIX)) {
-        cleanPath = cleanPath.substring(GITHUB_PAGES_PREFIX.length);
-    }
-    
-    // Default to index.html for root
-    if (cleanPath === '' || cleanPath === '/') {
-        cleanPath = '/index.html';
-    }
-    
-    // Build file path
-    let filePath = path.join(__dirname, cleanPath);
-    
-    // Normalize path to avoid extra slashes
-    filePath = path.normalize(filePath);
-    
-    // Security: ensure file is inside project directory
-    if (!filePath.startsWith(__dirname)) {
-        res.writeHead(403, { 'Content-Type': 'text/plain' });
-        res.end('Forbidden');
-        return;
-    }
-    
-    // Check if file exists
-    fs.stat(filePath, (err, stats) => {
-        if (err) {
-            if (err.code === 'ENOENT') {
-                // Try adding .html extension for clean URLs
-                const htmlPath = filePath + '.html';
-                fs.stat(htmlPath, (err2, stats2) => {
-                    if (!err2 && stats2.isFile()) {
-                        serveFile(htmlPath, res);
-                    } else {
-                        res.writeHead(404, { 'Content-Type': 'text/html' });
-                        res.end('<h1>404 - File Not Found</h1>');
-                    }
-                });
-            } else {
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('Server Error');
-            }
-            return;
-        }
-        
-        if (stats.isDirectory()) {
-            // Try to serve index.html from directory
-            const indexPath = path.join(filePath, 'index.html');
-            fs.stat(indexPath, (err2, stats2) => {
-                if (!err2 && stats2.isFile()) {
-                    serveFile(indexPath, res);
-                } else {
-                    res.writeHead(404, { 'Content-Type': 'text/html' });
-                    res.end('<h1>404 - Directory Not Accessible</h1>');
-                }
-            });
-            return;
-        }
-        
-        serveFile(filePath, res);
-    });
+// Serve static frontend files (your existing HTML/CSS/JS)
+app.use(express.static(path.join(__dirname))); // serves index.html, css/, js/, etc.
+
+// API routes (to be added)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'RentSpace API is running' });
 });
 
-function serveFile(filePath, res) {
-    // Determine content type
-    const extname = path.extname(filePath);
-    let contentType = 'text/html';
-    switch (extname) {
-        case '.css': contentType = 'text/css'; break;
-        case '.js': contentType = 'text/javascript'; break;
-        case '.json': contentType = 'application/json'; break;
-        case '.png': contentType = 'image/png'; break;
-        case '.jpg': contentType = 'image/jpeg'; break;
-        case '.jpeg': contentType = 'image/jpeg'; break;
-        case '.gif': contentType = 'image/gif'; break;
-        case '.svg': contentType = 'image/svg+xml'; break;
-        case '.webp': contentType = 'image/webp'; break;
-        case '.ico': contentType = 'image/x-icon'; break;
-    }
-    
-    // Set cache headers for static assets
-    if (['.css', '.js', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif'].includes(extname)) {
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-    }
-    
-    // Read and serve file
-    fs.readFile(filePath, (err, content) => {
-        if (err) {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Server Error');
-        } else {
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(content);
-        }
-    });
-}
+// TODO: add /api/auth, /api/properties, etc.
 
-server.listen(PORT, () => {
-    console.log(`\n🚀 Server running!`);
-    console.log(`📍 Standard mode: http://localhost:${PORT}`);
-    console.log(`📍 GitHub Pages mode: http://localhost:${PORT}/rentspace/`);
-    console.log(`\n💡 Use the GitHub Pages mode for testing: http://localhost:${PORT}/rentspace/airbnb.html\n`);
+// For any other route, serve the frontend (SPA fallback – optional)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// Connect to MongoDB then start server
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`📁 Frontend: http://localhost:${PORT}`);
+      console.log(`🔌 API: http://localhost:${PORT}/api/health`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
+  });
