@@ -13,18 +13,24 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static frontend files (your existing HTML/CSS/JS)
-app.use(express.static(path.join(__dirname))); // serves index.html, css/, js/, etc.
+// Serve static frontend files (HTML, CSS, JS, images, etc.)
+app.use(express.static(path.join(__dirname)));
 
-// API routes (to be added)
+// API routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'RentSpace API is running' });
 });
 
 // TODO: add /api/auth, /api/properties, etc.
 
-// For any other route, serve the frontend (SPA fallback – optional)
-app.get('*', (req, res) => {
+// SPA fallback – send index.html for any non‑API, non‑file GET request
+// This avoids Express 5's path-to-regexp wildcard error
+app.use((req, res, next) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) return next();
+  // Only handle GET requests for missing routes
+  if (req.method !== 'GET') return next();
+  // Send index.html (your frontend router will handle the rest)
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
