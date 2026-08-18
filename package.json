@@ -28,5 +28,9 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.2",
     "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2"
   }
 }

@@ -37,11 +37,27 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  verificationToken: String,
+  verificationToken: {
+    type: String,
+    select: false
+  },
   subscriptionPlan: {
     type: String,
-    enum: ['free', 'basic', 'pro'],
+    enum: ['free', 'basic', 'pro', 'developer'],
     default: 'free'
+  },
+  subscriptionExpiry: {
+    type: Date,
+    default: null
+  },
+  // ─── Password Reset Fields (NEW) ────────────────────────────
+  resetPasswordToken: {
+    type: String,
+    select: false // Don't return by default
+  },
+  resetPasswordExpires: {
+    type: Date,
+    select: false // Don't return by default
   },
   createdAt: {
     type: Date,
@@ -49,7 +65,7 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Encrypt password using bcrypt
+// ─── Encrypt password using bcrypt ──────────────────────────────
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
@@ -57,9 +73,14 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
-// Match user entered password to hashed password in database
+// ─── Match user entered password to hashed password ─────────────
 userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
+
+// ─── Indexes for performance ────────────────────────────────────
+userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 });
+userSchema.index({ resetPasswordToken: 1 }, { sparse: true });
 
 module.exports = mongoose.model('User', userSchema);
