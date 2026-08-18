@@ -10,7 +10,18 @@ const getBasePath = () => {
     // Local development
     return '';
 };
+
 const basePath = getBasePath();
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
 
 let allProperties = [];
 let currentProperty = null;
