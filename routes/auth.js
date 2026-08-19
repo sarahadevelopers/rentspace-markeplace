@@ -16,15 +16,24 @@ router.post('/signup', async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
 
-    // Check if user exists
+    // ── 1. Validate required fields ────────────────────────────
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({
+        error: 'All fields are required: name, email, phone, password'
+      });
+    }
+
+    // ── 2. Check for existing user ─────────────────────────────
     const existingUser = await User.findOne({
       $or: [{ email }, { phone }]
     });
     if (existingUser) {
-      return res.status(400).json({ error: 'User already exists with that email or phone' });
+      return res.status(400).json({
+        error: 'User already exists with that email or phone'
+      });
     }
 
-    // Create user
+    // ── 3. Create user ──────────────────────────────────────────
     const user = await User.create({
       name,
       email,
@@ -47,9 +56,34 @@ router.post('/signup', async (req, res) => {
         verified: user.verified
       }
     });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Server error during signup' });
+    // ── 4. Log the full error (for debugging) ──────────────────
+    console.error('❌ Signup error:', error);
+
+    // ── 5. Handle specific error types ──────────────────────────
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: error.message
+      });
+    }
+
+    if (error.code === 11000) {
+      // Duplicate key (email or phone) – fallback
+      return res.status(400).json({
+        error: 'User already exists with that email or phone'
+      });
+    }
+
+    // ── 6. Generic server error ─────────────────────────────────
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.status(500).json({
+      error: isProduction
+        ? 'Server error during signup. Please try again later.'
+        : error.message,
+      // Optionally show stack trace in development
+      ...(isProduction ? {} : { stack: error.stack })
+    });
   }
 });
 
