@@ -124,11 +124,15 @@ router.get('/:slug', async (req, res) => {
 });
 
 // ─── POST /api/properties (authenticated, with image upload) ──
+// ─── POST /api/properties (authenticated, with image upload) ──
 router.post('/', authMiddleware, upload.array('images', 10), async (req, res) => {
   try {
     console.log('📥 Incoming property data (body):', req.body);
     console.log('📸 Uploaded files:', req.files);
+    console.log('👤 User subscription plan:', req.user.subscriptionPlan);
+    console.log('👤 User subscription expiry:', req.user.subscriptionExpiry);
 
+    // ── 1. Validate required fields ──────────────────────────────
     const {
       title,
       listingType,
@@ -146,7 +150,6 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       status
     } = req.body;
 
-    // ── Validate required fields ──────────────────────────────
     if (!title || !listingType || !estate || !price || !description) {
       return res.status(400).json({
         success: false,
@@ -154,13 +157,32 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       });
     }
 
-    // ── Generate slug ──────────────────────────────────────────
+    // ── 2. Subscription check (PAID-ONLY) ────────────────────────
+    const validPlans = ['basic', 'pro', 'developer'];
+    const userPlan = req.user.subscriptionPlan || 'free';
+    const userExpiry = req.user.subscriptionExpiry;
+
+    // Check if user has a valid paid subscription
+    let isPaid = validPlans.includes(userPlan);
+    if (isPaid && userExpiry) {
+      // If expiry is set, it must be in the future
+      isPaid = new Date(userExpiry) > new Date();
+    }
+
+    if (!isPaid) {
+      return res.status(403).json({
+        success: false,
+        error: 'You need an active subscription to list properties. Please upgrade from your dashboard.'
+      });
+    }
+
+    // ── 3. Generate slug ──────────────────────────────────────────
     const slug = await generateUniqueSlug(title);
 
-    // ── Extract image URLs from Cloudinary upload ─────────────
+    // ── 4. Extract image URLs from Cloudinary upload ─────────────
     const imageUrls = req.files ? req.files.map(file => file.path) : [];
 
-    // ── Parse amenities (if sent as JSON string) ──────────────
+    // ── 5. Parse amenities (if sent as JSON string) ──────────────
     let amenitiesArray = [];
     if (amenities) {
       try {
@@ -170,7 +192,7 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       }
     }
 
-    // ── Build property object ──────────────────────────────────
+    // ── 6. Build property object ──────────────────────────────────
     const propertyData = {
       ownerId: req.user._id,
       title,
@@ -187,11 +209,12 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       images: imageUrls,
       amenities: amenitiesArray,
       propertyType: propertyType || 'apartment',
-      status: status || 'pending' // new listings require moderation
+      status: status || 'pending'
     };
 
     console.log('📦 Property data to save:', propertyData);
 
+    // ── 7. Save to database ───────────────────────────────────────
     const property = await Property.create(propertyData);
 
     res.status(201).json({ success: true, property });

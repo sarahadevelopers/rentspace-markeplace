@@ -850,3 +850,49 @@ textarea.form-control {
     flex-direction: column;
   }
 }
+
+/* Subscription Card */
+.subscription-section { margin-bottom: 2rem; }
+.subscription-card {
+  background: #1a1a1a;
+  border: 1px solid #2c2c2c;
+  border-radius: 12px;
+  padding: 20px 25px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+.sub-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.sub-header h3 { margin: 0; color: #c5a059; }
+.plan-badge {
+  background: #2c2c2c;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.plan-badge.active { background: #1a3a2a; color: #4CAF50; }
+.plan-badge.free { background: #3a1a1a; color: #ff6b6b; }
+.plan-details { display: flex; flex-wrap: wrap; gap: 20px; }
+.plan-details p { margin: 4px 0; color: #aaa; }
+.plan-actions { margin-top: 10px; }
+
+/* Modal */
+#upgradeModal .modal-content {
+  background: #1a1a1a;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 500px;
+  margin: auto;
+}
+.plan-option {
+  transition: border 0.2s;
+}
+.plan-option:hover {
+  border-color: #c5a059;
+}

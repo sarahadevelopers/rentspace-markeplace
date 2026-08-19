@@ -9,6 +9,64 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Dashboard styles (self-contained) -->
   <link rel="stylesheet" href="css/dashboard.css">
+  <!-- Additional subscription styles (add to dashboard.css) -->
+  <style>
+    /* Subscription card & modal styles – place these in dashboard.css if not already */
+    .subscription-section { margin-bottom: 2rem; }
+    .subscription-card {
+      background: #1a1a1a;
+      border: 1px solid #2c2c2c;
+      border-radius: 12px;
+      padding: 20px 25px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sub-header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .sub-header h3 { margin: 0; color: #c5a059; }
+    .plan-badge {
+      background: #2c2c2c;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .plan-badge.active { background: #1a3a2a; color: #4CAF50; }
+    .plan-badge.free { background: #3a1a1a; color: #ff6b6b; }
+    .plan-details { display: flex; flex-wrap: wrap; gap: 20px; }
+    .plan-details p { margin: 4px 0; color: #aaa; }
+    .plan-actions { margin-top: 10px; }
+    #upgradeModal .modal-content {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 500px;
+      margin: auto;
+    }
+    .plan-option {
+      transition: border 0.2s;
+      cursor: pointer;
+    }
+    .plan-option:hover {
+      border-color: #c5a059;
+    }
+    #upgradeModal .form-group { margin-bottom: 15px; }
+    #upgradeModal .form-group label { display: block; font-weight: 600; margin-bottom: 5px; color: #eaeaea; }
+    #upgradeModal .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #2c2c2c;
+      border-radius: 8px;
+      font-size: 16px;
+      background: #0d0d0d;
+      color: #eaeaea;
+    }
+  </style>
 </head>
 <body>
 
@@ -31,6 +89,43 @@
 </header>
 
 <main class="admin-container">
+
+  <!-- ===== SUBSCRIPTION SECTION ===== -->
+  <section class="subscription-section">
+    <div class="subscription-card" id="subscriptionCard">
+      <div class="sub-header">
+        <h3><i class="fas fa-crown"></i> Your Plan</h3>
+        <span class="plan-badge" id="planBadge">Free</span>
+      </div>
+      <div class="sub-body">
+        <div class="plan-details">
+          <p><strong>Plan:</strong> <span id="currentPlan">Free</span></p>
+          <p><strong>Status:</strong> <span id="planStatus">Active</span></p>
+          <p><strong>Expires:</strong> <span id="planExpiry">—</span></p>
+          <p><strong>Listings used:</strong> <span id="listingsUsed">0</span></p>
+        </div>
+        <div class="plan-actions" id="planActions">
+          <!-- Shown only if plan is free or expired -->
+          <button class="btn btn-primary" id="upgradeBtn"><i class="fas fa-rocket"></i> Upgrade Plan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upgrade Modal (hidden by default) -->
+    <div id="upgradeModal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <h3 style="color:#c5a059;">Choose Your Plan</h3>
+        <div id="planList"></div>
+        <div class="form-group">
+          <label for="subscribePhone">Phone Number (STK Push)</label>
+          <input type="tel" id="subscribePhone" placeholder="2547XXXXXXXX" value="">
+        </div>
+        <button class="btn btn-primary" id="subscribeBtn">Subscribe</button>
+        <button class="btn btn-outline" id="closeModalBtn">Cancel</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== FORM STATUS ===== -->
   <div id="formStatus" style="display:none;" class="existing-images-notice"></div>
 
@@ -103,7 +198,7 @@
       </div>
     </div>
 
-    <!-- Row 4: Price (with dynamic label & hint) + Status -->
+    <!-- Row 4: Price + Status -->
     <div class="form-row">
       <div class="form-group">
         <label for="price" id="priceLabel" class="required">Price (KES) *</label>

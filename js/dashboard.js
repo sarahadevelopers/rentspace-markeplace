@@ -8,6 +8,7 @@
 // - Features/amenities management
 // - Pagination, image modal, toasts
 // - Dynamic price labels for Sale/Rent/Airbnb
+// - Subscription management (plans, upgrade, STK push)
 // =============================================
 
 // =========================
@@ -496,8 +497,15 @@ const PropertyAPI = {
             body: formData
         });
         if (!res.ok) {
-            const err = await res.text();
-            throw new Error(err || 'Creation failed');
+            // Try to parse JSON error
+            let errMsg;
+            try {
+                const errData = await res.json();
+                errMsg = errData.error || 'Creation failed';
+            } catch (e) {
+                errMsg = await res.text() || 'Creation failed';
+            }
+            throw new Error(errMsg);
         }
         return await res.json();
     },
@@ -509,8 +517,14 @@ const PropertyAPI = {
             body: formData
         });
         if (!res.ok) {
-            const err = await res.text();
-            throw new Error(err || 'Update failed');
+            let errMsg;
+            try {
+                const errData = await res.json();
+                errMsg = errData.error || 'Update failed';
+            } catch (e) {
+                errMsg = await res.text() || 'Update failed';
+            }
+            throw new Error(errMsg);
         }
         return await res.json();
     },
@@ -749,6 +763,131 @@ const ImageModal = {
 };
 
 // =========================
+// Subscription Functions
+// =========================
+
+// Load subscription data and update the UI card
+async function loadSubscriptionData() {
+    try {
+        const user = JSON.parse(localStorage.getItem('rentspace_user'));
+        if (!user) return;
+
+        const plan = user.subscriptionPlan || 'free';
+        const expiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const isPaid = ['basic', 'pro', 'developer'].includes(plan);
+        const isExpired = expiry && expiry < new Date();
+
+        // Update UI
+        document.getElementById('currentPlan').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+        document.getElementById('planBadge').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+
+        if (isPaid && !isExpired) {
+            document.getElementById('planStatus').textContent = 'Active';
+            document.getElementById('planStatus').style.color = '#4CAF50';
+            document.getElementById('planExpiry').textContent = expiry ? expiry.toLocaleDateString() : '—';
+            document.getElementById('planActions').innerHTML = '';
+            document.getElementById('planBadge').className = 'plan-badge active';
+        } else {
+            document.getElementById('planStatus').textContent = isExpired ? 'Expired' : 'Free Trial';
+            document.getElementById('planStatus').style.color = '#ff6b6b';
+            document.getElementById('planExpiry').textContent = isExpired ? expiry.toLocaleDateString() : '—';
+            document.getElementById('planBadge').className = 'plan-badge free';
+            // Show upgrade button
+            document.getElementById('planActions').innerHTML = `
+                <button class="btn btn-primary" id="upgradeBtn"><i class="fas fa-rocket"></i> Upgrade Plan</button>
+            `;
+            document.getElementById('upgradeBtn').addEventListener('click', openUpgradeModal);
+        }
+
+        // Get listing count
+        const properties = await PropertyAPI.fetchMyProperties();
+        document.getElementById('listingsUsed').textContent = properties.length;
+
+    } catch (error) {
+        console.error('Error loading subscription data:', error);
+    }
+}
+
+// Open upgrade modal and fetch plans
+async function openUpgradeModal() {
+    const modal = document.getElementById('upgradeModal');
+    const planList = document.getElementById('planList');
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`${API_BASE}/api/subscriptions/plans`);
+        const plans = await res.json();
+
+        let html = '';
+        for (const [key, plan] of Object.entries(plans)) {
+            if (key === 'free') continue; // skip free plan
+            html += `
+                <div class="plan-option" style="border:1px solid #2c2c2c; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer;" data-plan="${key}">
+                    <h4 style="color:#c5a059;">${plan.name}</h4>
+                    <p>KES ${plan.price.toLocaleString()}/mo</p>
+                    <p>${plan.listings === Infinity ? 'Unlimited' : plan.listings} listings</p>
+                    <small>${plan.featured ? '⭐ Featured' : ''} ${plan.analytics ? '📊 Analytics' : ''}</small>
+                </div>
+            `;
+        }
+        planList.innerHTML = html;
+
+        // Add click handlers to plan options
+        document.querySelectorAll('.plan-option').forEach(el => {
+            el.addEventListener('click', function() {
+                document.querySelectorAll('.plan-option').forEach(o => o.style.borderColor = '#2c2c2c');
+                this.style.borderColor = '#c5a059';
+                this.dataset.selected = 'true';
+            });
+        });
+
+    } catch (error) {
+        console.error('Failed to load plans:', error);
+        Utils.showToast('Failed to load plans. Please try again.', 'error');
+    }
+}
+
+// Handle subscription submission
+async function handleSubscription() {
+    const selected = document.querySelector('.plan-option[data-selected="true"]');
+    if (!selected) {
+        Utils.showToast('Please select a plan.', 'error');
+        return;
+    }
+    const plan = selected.dataset.plan;
+    const phone = document.getElementById('subscribePhone').value.trim();
+    if (!phone || !/^254\d{9}$/.test(phone)) {
+        Utils.showToast('Please enter a valid phone number (2547XXXXXXXX).', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('subscribeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    try {
+        const token = getToken();
+        const res = await fetch(`${API_BASE}/api/subscriptions/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ plan, phoneNumber: phone })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Subscription failed');
+
+        Utils.showToast('STK push sent. Check your phone.', 'success');
+        document.getElementById('upgradeModal').style.display = 'none';
+        // Reload subscription data after a delay to reflect updated plan
+        setTimeout(loadSubscriptionData, 5000);
+    } catch (error) {
+        Utils.showToast(error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Subscribe';
+    }
+}
+
+// =========================
 // Form Submit Handler
 // =========================
 async function handleFormSubmit(e) {
@@ -906,6 +1045,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     });
 
-    // Load properties
+    // ─── Subscription Modal Events ──────────────────────────────
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => {
+            document.getElementById('upgradeModal').style.display = 'none';
+        });
+    }
+    const subscribeBtn = document.getElementById('subscribeBtn');
+    if (subscribeBtn) {
+        subscribeBtn.addEventListener('click', handleSubscription);
+    }
+
+    // Load properties and subscription data
     await PropertiesTable.loadAndRender();
+    await loadSubscriptionData();
 });
