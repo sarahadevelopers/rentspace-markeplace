@@ -19,8 +19,9 @@ const propertySchema = new mongoose.Schema({
   },
   listingType: {
     type: String,
-    enum: ['long_term', 'short_term'],
-    required: true
+    enum: ['sale', 'rent', 'short_term', 'long_term'],
+    required: true,
+    default: 'sale'
   },
   propertyType: {
     type: String,
@@ -72,9 +73,9 @@ const propertySchema = new mongoose.Schema({
   }
 });
 
-propertySchema.pre('save', function(next) {
+// ─── FIXED: Pre‑save hook using async/await (no `next`) ──────
+propertySchema.pre('save', async function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Property', propertySchema);
