@@ -50,14 +50,13 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // ─── Password Reset Fields (NEW) ────────────────────────────
   resetPasswordToken: {
     type: String,
-    select: false // Don't return by default
+    select: false
   },
   resetPasswordExpires: {
     type: Date,
-    select: false // Don't return by default
+    select: false
   },
   createdAt: {
     type: Date,
@@ -66,11 +65,11 @@ const userSchema = new mongoose.Schema({
 });
 
 // ─── Encrypt password using bcrypt ──────────────────────────────
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+// ✅ FIXED: Removed 'next' parameter (not needed with async/await)
+userSchema.pre('save', async function() {
+  if (!this.isModified('password')) return;
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-  next();
 });
 
 // ─── Match user entered password to hashed password ─────────────
@@ -79,8 +78,8 @@ userSchema.methods.matchPassword = async function(enteredPassword) {
 };
 
 // ─── Indexes for performance ────────────────────────────────────
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
+// ✅ FIXED: Removed duplicate indexes (unique: true already creates them)
+// Only keep the sparse index for resetPasswordToken
 userSchema.index({ resetPasswordToken: 1 }, { sparse: true });
 
 module.exports = mongoose.model('User', userSchema);
