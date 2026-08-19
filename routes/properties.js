@@ -283,9 +283,10 @@ router.get('/my-properties', authMiddleware, async (req, res) => {
 });
 
 // ─── PUT /api/properties/:id (authenticated, owner or admin) ──
-router.put('/:id', authMiddleware, async (req, res) => {
+// ─── PUT /api/properties/:id (authenticated, owner or admin) ──
+router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) => {
   try {
-    let property = await Property.findById(req.params.id);
+    const property = await Property.findById(req.params.id);
     if (!property) {
       return res.status(404).json({ success: false, error: 'Property not found' });
     }
@@ -295,12 +296,51 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized to update this property' });
     }
 
-    // If title is being updated, regenerate slug
-    let updateData = { ...req.body };
+    // ── Build update data from request body ──────────────────
+    const updateData = { ...req.body };
+
+    // ── Handle images ──────────────────────────────────────────
+    // 1. Parse existing images from form (sent as JSON string)
+    let existingImages = [];
+    if (req.body.existingImages) {
+      try {
+        existingImages = typeof req.body.existingImages === 'string'
+          ? JSON.parse(req.body.existingImages)
+          : req.body.existingImages;
+      } catch (e) {
+        existingImages = [];
+      }
+    }
+
+    // 2. Get new uploaded images (if any)
+    const newImageUrls = req.files ? req.files.map(file => file.path) : [];
+
+    // 3. Combine: keep existing images + append new ones
+    //    (If existingImages is empty, fallback to current property images)
+    let finalImages = existingImages.length > 0 ? existingImages : property.images || [];
+    if (newImageUrls.length > 0) {
+      // Append new images to the end
+      finalImages = [...finalImages, ...newImageUrls];
+    }
+
+    // 4. Update the images array in updateData
+    updateData.images = finalImages;
+
+    // ── Handle slug if title changes ──────────────────────────
     if (req.body.title && req.body.title !== property.title) {
       updateData.slug = await generateUniqueSlug(req.body.title, property._id);
     }
 
+    // ── Remove fields that shouldn't be updated ──────────────
+    delete updateData._id;
+    delete updateData.ownerId;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+    delete updateData.slug; // handled above
+    delete updateData.existingImages;
+    delete updateData.existingPublicIds;
+
+    // ── Update the property ────────────────────────────────────
     const updatedProperty = await Property.findByIdAndUpdate(
       req.params.id,
       updateData,

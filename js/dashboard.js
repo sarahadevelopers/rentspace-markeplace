@@ -9,7 +9,19 @@
 // - Pagination, image modal, toasts
 // - Dynamic price labels for Sale/Rent/Airbnb
 // - Subscription management (plans, upgrade, STK push)
+// - Auto-retry property creation after subscription
 // =============================================
+
+// =========================
+// Global State
+// =========================
+let currentEditId = null;
+let existingImages = [];
+let existingPublicIds = [];
+let allProperties = [];
+let features = [];
+let selectedImages = [];
+let pendingFormData = null;           // 🆕 Store form data for retry
 
 // =========================
 // API Configuration
@@ -127,16 +139,6 @@ const submitBtn = document.getElementById('submitBtn');
 const resetBtn = document.getElementById('resetForm');
 const propertyCountDisplay = document.getElementById('propertyCountDisplay');
 const paginationControls = document.getElementById('paginationControls');
-
-// =========================
-// Global State
-// =========================
-let currentEditId = null;
-let existingImages = [];        // URLs of existing images
-let existingPublicIds = [];     // (optional) Cloudinary public IDs
-let allProperties = [];
-let features = [];              // amenities list
-let selectedImages = [];        // File objects for new images
 
 // =========================
 // Dynamic Price Label / Hint
@@ -763,6 +765,48 @@ const ImageModal = {
 };
 
 // =========================
+// Refresh User Data
+// =========================
+async function refreshUserData() {
+    try {
+        const token = getToken();
+        if (!token) return;
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const user = data.user || data;
+            localStorage.setItem('rentspace_user', JSON.stringify(user));
+            // Update subscription UI
+            await loadSubscriptionData();
+        }
+    } catch (error) {
+        console.error('Failed to refresh user data:', error);
+    }
+}
+
+// =========================
+// Retry Pending Property
+// =========================
+async function retryPendingProperty() {
+    if (!pendingFormData) return;
+
+    try {
+        Utils.showToast('🔄 Retrying your property creation...', 'info');
+        await PropertyAPI.createProperty(pendingFormData);
+        Utils.showToast('✅ Property created successfully!', 'success');
+        pendingFormData = null;
+        FormManager.reset();
+        await PropertiesTable.loadAndRender();
+    } catch (error) {
+        console.error('Retry failed:', error);
+        Utils.showToast('Please try creating your property again manually.', 'error');
+        // Don't clear pendingFormData – user might want to retry later
+    }
+}
+
+// =========================
 // Subscription Functions
 // =========================
 
@@ -777,31 +821,50 @@ async function loadSubscriptionData() {
         const isPaid = ['basic', 'pro', 'developer'].includes(plan);
         const isExpired = expiry && expiry < new Date();
 
-        // Update UI
-        document.getElementById('currentPlan').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
-        document.getElementById('planBadge').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+        // ─── Get listing count ──────────────────────────────────
+        let listingsUsed = 0;
+        try {
+            const properties = await PropertyAPI.fetchMyProperties();
+            listingsUsed = properties.length;
+        } catch (e) {
+            // If user can't fetch properties, just show 0
+        }
 
+        // ─── Update UI ──────────────────────────────────────────
         if (isPaid && !isExpired) {
+            // Paid user – show active plan
+            document.getElementById('currentPlan').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+            document.getElementById('planBadge').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+            document.getElementById('planBadge').className = 'plan-badge active';
             document.getElementById('planStatus').textContent = 'Active';
             document.getElementById('planStatus').style.color = '#4CAF50';
             document.getElementById('planExpiry').textContent = expiry ? expiry.toLocaleDateString() : '—';
+            document.getElementById('listingsUsed').textContent = listingsUsed;
             document.getElementById('planActions').innerHTML = '';
-            document.getElementById('planBadge').className = 'plan-badge active';
         } else {
-            document.getElementById('planStatus').textContent = isExpired ? 'Expired' : 'Free Trial';
+            // ─── No active subscription ──────────────────────────
+            document.getElementById('currentPlan').textContent = 'No Active Subscription';
+            document.getElementById('planBadge').textContent = 'Inactive';
+            document.getElementById('planBadge').className = 'plan-badge inactive';
+            document.getElementById('planStatus').textContent = 'Inactive';
             document.getElementById('planStatus').style.color = '#ff6b6b';
-            document.getElementById('planExpiry').textContent = isExpired ? expiry.toLocaleDateString() : '—';
-            document.getElementById('planBadge').className = 'plan-badge free';
-            // Show upgrade button
+            document.getElementById('planExpiry').textContent = '—';
+            document.getElementById('listingsUsed').textContent = '—';
+
+            // ─── Show upgrade CTA ────────────────────────────────
             document.getElementById('planActions').innerHTML = `
-                <button class="btn btn-primary" id="upgradeBtn"><i class="fas fa-rocket"></i> Upgrade Plan</button>
+                <div style="background:#2a1a1a; border-left:4px solid #c5a059; padding:12px 16px; border-radius:6px; margin-bottom:10px;">
+                    <p style="margin:0; color:#eaeaea;">
+                        <i class="fas fa-lock" style="color:#c5a059;"></i>
+                        You need an active subscription to list properties.
+                    </p>
+                </div>
+                <button class="btn btn-primary" id="upgradeBtn" style="width:100%; padding:12px;">
+                    <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
+                </button>
             `;
             document.getElementById('upgradeBtn').addEventListener('click', openUpgradeModal);
         }
-
-        // Get listing count
-        const properties = await PropertyAPI.fetchMyProperties();
-        document.getElementById('listingsUsed').textContent = properties.length;
 
     } catch (error) {
         console.error('Error loading subscription data:', error);
@@ -814,37 +877,281 @@ async function openUpgradeModal() {
     const planList = document.getElementById('planList');
     modal.style.display = 'flex';
 
-    try {
-        const res = await fetch(`${API_BASE}/api/subscriptions/plans`);
-        const plans = await res.json();
+    // ── Get current property data for the summary ──────────────
+    const title = document.getElementById('title')?.value?.trim() || '';
+    const estate = document.getElementById('estate')?.value?.trim() || '';
+    const county = document.getElementById('county')?.value?.trim() || '';
+    const price = parseFloat(document.getElementById('price')?.value || 0);
+    const imageCount = ImageManager.getNewImages().length;
+    const hasPending = pendingFormData !== null;
+    const isEdit = currentEditId !== null;
 
-        let html = '';
-        for (const [key, plan] of Object.entries(plans)) {
-            if (key === 'free') continue; // skip free plan
+    // ── Build property summary ──────────────────────────────────
+    let summaryHTML = '';
+    if (hasPending || title || estate || price) {
+        const location = estate && county ? `${estate}, ${county}` : estate || county || '—';
+        summaryHTML = `
+            <div class="modal-property-summary">
+                <div class="summary-label">${hasPending ? '📌 You\'re about to list' : isEdit ? '✏️ Editing' : '📋 Property details'}</div>
+                <div class="summary-title">${title || 'Untitled'}</div>
+                <div class="summary-meta">
+                    📍 ${location} ${price > 0 ? `• 💰 KES ${price.toLocaleString()}` : ''} ${imageCount > 0 ? `• 📸 ${imageCount} image${imageCount > 1 ? 's' : ''}` : ''}
+                </div>
+                ${hasPending ? `<div class="summary-saved"><i class="fas fa-check-circle"></i> Your property data is saved – upgrade to publish it!</div>` : ''}
+            </div>
+        `;
+    } else {
+        summaryHTML = `
+            <div class="modal-property-summary" style="border-left-color:#c5a059;">
+                <div class="summary-meta" style="font-size:14px; color:#aaa;">
+                    <i class="fas fa-rocket" style="color:#c5a059;"></i> Upgrade your plan to start listing properties.
+                </div>
+            </div>
+        `;
+    }
+
+    // ── Pre-fill phone number ──────────────────────────────────
+    const user = JSON.parse(localStorage.getItem('rentspace_user') || '{}');
+    let userPhone = '';
+    if (user.phone) {
+        userPhone = user.phone.replace(/\s/g, '').replace(/^\+/, '');
+        if (!userPhone.startsWith('254')) {
+            userPhone = '254' + userPhone.replace(/^0+/, '');
+        }
+    }
+
+    // ── Define packages ──────────────────────────────────────────
+    // These map to your backend plans: basic, pro, developer
+    const PACKAGES = {
+        monthly: [
+            {
+                id: 'basic',
+                name: 'Basic',
+                icon: 'fa-star',
+                price: 2500,
+                period: 'month',
+                features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
+                popular: false,
+                color: '#c5a059'
+            },
+            {
+                id: 'pro',
+                name: 'Silver',
+                icon: 'fa-gem',
+                price: 5000,
+                period: 'month',
+                features: ['Unlimited listings', '📊 Advanced analytics', 'Priority support', 'WhatsApp leads', '⭐ Featured placement'],
+                popular: true,
+                color: '#b0b0b0'
+            },
+            {
+                id: 'developer',
+                name: 'Gold',
+                icon: 'fa-crown',
+                price: 10000,
+                period: 'month',
+                features: ['Unlimited listings', '📊 Premium analytics', '24/7 priority support', 'WhatsApp leads', '⭐ Featured placement', '🔌 API access', '📦 Bulk upload'],
+                popular: false,
+                color: '#d4a843'
+            }
+        ],
+        weekly: [
+            {
+                id: 'basic',
+                name: 'Basic',
+                icon: 'fa-star',
+                price: 700, // ~2500/4
+                period: 'week',
+                features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
+                popular: false,
+                color: '#c5a059'
+            },
+            {
+                id: 'pro',
+                name: 'Silver',
+                icon: 'fa-gem',
+                price: 1400, // ~5000/4
+                period: 'week',
+                features: ['Unlimited listings', '📊 Advanced analytics', 'Priority support', 'WhatsApp leads', '⭐ Featured placement'],
+                popular: true,
+                color: '#b0b0b0'
+            },
+            {
+                id: 'developer',
+                name: 'Gold',
+                icon: 'fa-crown',
+                price: 2800, // ~10000/4
+                period: 'week',
+                features: ['Unlimited listings', '📊 Premium analytics', '24/7 priority support', 'WhatsApp leads', '⭐ Featured placement', '🔌 API access', '📦 Bulk upload'],
+                popular: false,
+                color: '#d4a843'
+            }
+        ]
+    };
+
+    let currentPeriod = 'monthly';
+
+    // ── Render the plan cards ────────────────────────────────────
+    function renderPlans(period) {
+        const plans = PACKAGES[period] || PACKAGES.monthly;
+        const periodLabel = period === 'monthly' ? 'per month' : 'per week';
+
+        let html = `
+            <div class="modal-packages">
+                <div class="modal-period-toggle">
+                    <button class="period-btn ${period === 'monthly' ? 'active' : ''}" data-period="monthly">Monthly</button>
+                    <button class="period-btn ${period === 'weekly' ? 'active' : ''}" data-period="weekly">Weekly</button>
+                    <span class="toggle-savings">Save 15% with monthly</span>
+                </div>
+                <div class="packages-grid">
+        `;
+
+        plans.forEach((pkg, index) => {
+            const popularBadge = pkg.popular ? `<div class="popular-badge">🔥 Most Popular</div>` : '';
             html += `
-                <div class="plan-option" style="border:1px solid #2c2c2c; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer;" data-plan="${key}">
-                    <h4 style="color:#c5a059;">${plan.name}</h4>
-                    <p>KES ${plan.price.toLocaleString()}/mo</p>
-                    <p>${plan.listings === Infinity ? 'Unlimited' : plan.listings} listings</p>
-                    <small>${plan.featured ? '⭐ Featured' : ''} ${plan.analytics ? '📊 Analytics' : ''}</small>
+                <div class="package-card ${pkg.popular ? 'popular' : ''}" data-plan="${pkg.id}" data-period="${period}">
+                    ${popularBadge}
+                    <div class="package-header">
+                        <i class="fas ${pkg.icon}" style="color:${pkg.color};"></i>
+                        <h4>${pkg.name}</h4>
+                    </div>
+                    <div class="package-price">
+                        <span class="price-amount">KES ${pkg.price.toLocaleString()}</span>
+                        <span class="price-period">/${pkg.period}</span>
+                    </div>
+                    <ul class="package-features">
+                        ${pkg.features.map(f => `<li><i class="fas fa-check" style="color:#c5a059;"></i> ${f}</li>`).join('')}
+                    </ul>
                 </div>
             `;
-        }
-        planList.innerHTML = html;
-
-        // Add click handlers to plan options
-        document.querySelectorAll('.plan-option').forEach(el => {
-            el.addEventListener('click', function() {
-                document.querySelectorAll('.plan-option').forEach(o => o.style.borderColor = '#2c2c2c');
-                this.style.borderColor = '#c5a059';
-                this.dataset.selected = 'true';
-            });
         });
 
-    } catch (error) {
-        console.error('Failed to load plans:', error);
-        Utils.showToast('Failed to load plans. Please try again.', 'error');
+        html += `
+                </div>
+            </div>
+        `;
+
+        return html;
     }
+
+    // ─── Render the full modal content ────────────────────────────
+    planList.innerHTML = `
+        ${summaryHTML}
+        ${renderPlans(currentPeriod)}
+        <div class="modal-phone-section">
+            <label for="subscribePhone">📱 Phone Number (STK Push)</label>
+            <input type="tel" id="subscribePhone" placeholder="2547XXXXXXXX" value="${userPhone}">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" id="subscribeBtn">Subscribe Now</button>
+            <button class="btn btn-outline" id="closeModalBtn">Cancel</button>
+        </div>
+    `;
+
+    // ─── Re-bind events ──────────────────────────────────────────
+    // Period toggle
+    document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const period = this.dataset.period;
+            currentPeriod = period;
+            // Re-render with the selected period
+            const currentSummary = planList.querySelector('.modal-property-summary')?.outerHTML || '';
+            const phoneSection = planList.querySelector('.modal-phone-section')?.outerHTML || '';
+            const actions = planList.querySelector('.modal-actions')?.outerHTML || '';
+            planList.innerHTML = `
+                ${currentSummary || summaryHTML}
+                ${renderPlans(period)}
+                ${phoneSection}
+                ${actions}
+            `;
+            // Re-bind package clicks
+            bindPackageClicks();
+            // Re-bind period toggles
+            document.querySelectorAll('.period-btn').forEach(b => {
+                b.addEventListener('click', arguments.callee);
+            });
+            // Re-bind subscribe button
+            document.getElementById('subscribeBtn')?.addEventListener('click', handleSubscription);
+            // Re-bind close button
+            document.getElementById('closeModalBtn')?.addEventListener('click', () => {
+                document.getElementById('upgradeModal').style.display = 'none';
+            });
+        });
+    });
+
+    function bindPackageClicks() {
+        document.querySelectorAll('.package-card').forEach(el => {
+            el.addEventListener('click', function() {
+                document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+                this.dataset.selected = 'true';
+                // Highlight the selected card with a glow
+                this.style.borderColor = '#c5a059';
+                this.style.boxShadow = '0 0 30px rgba(197, 160, 89, 0.25)';
+            });
+        });
+    }
+
+    bindPackageClicks();
+
+    // ─── Re-bind subscribe button ──────────────────────────────
+    document.getElementById('subscribeBtn')?.addEventListener('click', handleSubscription);
+
+    // ─── Re-bind close button ──────────────────────────────────
+    document.getElementById('closeModalBtn')?.addEventListener('click', () => {
+        document.getElementById('upgradeModal').style.display = 'none';
+    });
+
+    // ─── Update subscribe handler to read selected package ────
+    // Override handleSubscription to use the new package selection
+    const originalHandleSubscription = handleSubscription;
+    handleSubscription = async function() {
+        const selected = document.querySelector('.package-card.selected');
+        if (!selected) {
+            Utils.showToast('Please select a plan.', 'error');
+            return;
+        }
+        const plan = selected.dataset.plan;
+        const period = selected.dataset.period || 'monthly';
+        const phone = document.getElementById('subscribePhone').value.trim();
+        if (!phone || !/^254\d{9}$/.test(phone)) {
+            Utils.showToast('Please enter a valid phone number (2547XXXXXXXX).', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('subscribeBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+        try {
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/api/subscriptions/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ plan, phoneNumber: phone })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Subscription failed');
+
+            Utils.showToast('STK push sent. Check your phone.', 'success');
+            document.getElementById('upgradeModal').style.display = 'none';
+
+            await refreshUserData();
+            setTimeout(async () => {
+                await retryPendingProperty();
+            }, 2000);
+
+        } catch (error) {
+            Utils.showToast(error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Subscribe Now';
+        }
+    };
+
+    // ─── Override the global handleSubscription ────────────────
+    // This ensures the subscribe button uses the updated handler
+    document.getElementById('subscribeBtn')?.addEventListener('click', handleSubscription);
 }
 
 // Handle subscription submission
@@ -877,8 +1184,15 @@ async function handleSubscription() {
 
         Utils.showToast('STK push sent. Check your phone.', 'success');
         document.getElementById('upgradeModal').style.display = 'none';
-        // Reload subscription data after a delay to reflect updated plan
-        setTimeout(loadSubscriptionData, 5000);
+
+        // ── Refresh user data and retry pending property ──────
+        await refreshUserData(); // updates localStorage and subscription UI
+
+        // Wait a moment for the backend to fully process (optional)
+        setTimeout(async () => {
+            await retryPendingProperty();
+        }, 2000);
+
     } catch (error) {
         Utils.showToast(error.message, 'error');
     } finally {
@@ -893,7 +1207,7 @@ async function handleSubscription() {
 async function handleFormSubmit(e) {
     e.preventDefault();
 
-    // Validation
+    // ── Validation ──────────────────────────────────────────────
     const title = document.getElementById('title')?.value.trim();
     const estate = document.getElementById('estate')?.value.trim();
     const county = document.getElementById('county')?.value.trim();
@@ -914,6 +1228,7 @@ async function handleFormSubmit(e) {
         return;
     }
 
+    // ── Build FormData ──────────────────────────────────────────
     const formData = new FormData();
     formData.append('title', title);
     formData.append('listingType', document.getElementById('listingType')?.value || 'sale');
@@ -939,6 +1254,7 @@ async function handleFormSubmit(e) {
         formData.append('existingPublicIds', JSON.stringify(existingPublicIds));
     }
 
+    // ── Disable submit button ──────────────────────────────────
     submitBtn.disabled = true;
     submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${currentEditId ? 'Updating...' : 'Creating...'}`;
 
@@ -946,18 +1262,60 @@ async function handleFormSubmit(e) {
         if (currentEditId) {
             await PropertyAPI.updateProperty(currentEditId, formData);
             Utils.showToast('Property updated successfully');
+            FormManager.reset();
+            await PropertiesTable.loadAndRender();
         } else {
             await PropertyAPI.createProperty(formData);
             Utils.showToast('Property created successfully');
+            FormManager.reset();
+            await PropertiesTable.loadAndRender();
         }
-        FormManager.reset();
-        await PropertiesTable.loadAndRender();
     } catch (error) {
         console.error('Save error:', error);
-        Utils.showToast(error.message || 'Failed to save property', 'error');
+
+        // ─── 🚨 Check if it's a subscription error (403) ──────
+        const errorMsg = error.message || '';
+        const isSubscriptionError =
+            errorMsg.toLowerCase().includes('subscription') ||
+            errorMsg.toLowerCase().includes('subscribe') ||
+            errorMsg.toLowerCase().includes('upgrade');
+
+        if (isSubscriptionError) {
+            // ── Store pending data ──────────────────────────────
+            pendingFormData = formData;
+
+            // ── Show a friendly upgrade prompt ──────────────────
+            Utils.showToast('📢 You need a subscription to list properties. Upgrade now!', 'warning');
+
+            // ── Open the upgrade modal ──────────────────────────
+            setTimeout(() => {
+                openUpgradeModal();
+
+                // Scroll to subscription section
+                const subCard = document.getElementById('subscriptionCard');
+                if (subCard) {
+                    subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+
+                // Highlight the subscription card
+                if (subCard) {
+                    subCard.style.borderColor = '#c5a059';
+                    subCard.style.boxShadow = '0 0 20px rgba(197, 160, 89, 0.3)';
+                    setTimeout(() => {
+                        subCard.style.borderColor = '#2c2c2c';
+                        subCard.style.boxShadow = 'none';
+                    }, 3000);
+                }
+            }, 500);
+        } else {
+            // ── Generic error ────────────────────────────────────
+            Utils.showToast(errorMsg || 'Failed to save property', 'error');
+        }
     } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = currentEditId ? '<i class="fas fa-save"></i> Update Property' : '<i class="fas fa-save"></i> Create Property';
+        submitBtn.innerHTML = currentEditId
+            ? '<i class="fas fa-save"></i> Update Property'
+            : '<i class="fas fa-save"></i> Create Property';
     }
 }
 
