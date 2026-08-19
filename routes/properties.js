@@ -1,10 +1,35 @@
 const express = require('express');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const Property = require('../models/Property');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// Helper: generate unique slug from title
+// ─── Cloudinary Configuration ──────────────────────────────────
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// ─── Multer Storage (uploads directly to Cloudinary) ──────────
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'rentspace/properties',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 800, height: 600, crop: 'limit' }]
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB per file
+});
+
+// ─── Helper: generate unique slug from title ──────────────────
 async function generateUniqueSlug(title, existingId = null) {
   let baseSlug = title
     .toLowerCase()
@@ -12,7 +37,7 @@ async function generateUniqueSlug(title, existingId = null) {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
-  
+
   let slug = baseSlug;
   let counter = 1;
   let existing = await Property.findOne({ slug, _id: { $ne: existingId } });
@@ -24,9 +49,7 @@ async function generateUniqueSlug(title, existingId = null) {
   return slug;
 }
 
-// @route   GET /api/properties
-// @desc    Get all approved properties (public) with pagination & filtering
-// @query   page, limit, estate, minPrice, maxPrice, type, bedrooms, bathrooms, featured
+// ─── GET /api/properties (public, with filters & pagination) ──
 router.get('/', async (req, res) => {
   try {
     const {
@@ -42,23 +65,23 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     const query = { status: 'approved' };
-    
+
     if (estate) query.estate = estate;
     if (type) query.listingType = type;
     if (featured === 'true') query.featured = true;
     if (bedrooms) query.bedrooms = parseInt(bedrooms);
     if (bathrooms) query.bathrooms = parseInt(bathrooms);
-    
+
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = parseInt(minPrice);
       if (maxPrice) query.price.$lte = parseInt(maxPrice);
     }
-    
+
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
-    
+
     const [properties, total] = await Promise.all([
       Property.find(query)
         .skip(skip)
@@ -67,7 +90,7 @@ router.get('/', async (req, res) => {
         .lean(),
       Property.countDocuments(query)
     ]);
-    
+
     res.json({
       success: true,
       count: properties.length,
@@ -82,18 +105,17 @@ router.get('/', async (req, res) => {
   }
 });
 
-// @route   GET /api/properties/:slug
-// @desc    Get single property by slug (public)
+// ─── GET /api/properties/:slug (public) ────────────────────────
 router.get('/:slug', async (req, res) => {
   try {
     const property = await Property.findOne({ slug: req.params.slug }).lean();
     if (!property) {
       return res.status(404).json({ success: false, error: 'Property not found' });
     }
-    
-    // Increment view count asynchronously (don't wait for response)
+
+    // Increment view count asynchronously
     Property.updateOne({ _id: property._id }, { $inc: { views: 1 } }).exec();
-    
+
     res.json({ success: true, property });
   } catch (error) {
     console.error('Error fetching property:', error);
@@ -101,44 +123,119 @@ router.get('/:slug', async (req, res) => {
   }
 });
 
-// @route   POST /api/properties
-// @desc    Create a new property (authenticated)
-router.post('/', authMiddleware, async (req, res) => {
+// ─── POST /api/properties (authenticated, with image upload) ──
+router.post('/', authMiddleware, upload.array('images', 10), async (req, res) => {
   try {
-    const { title, ...rest } = req.body;
-    if (!title) {
-      return res.status(400).json({ success: false, error: 'Title is required' });
-    }
-    
-    const slug = await generateUniqueSlug(title);
-    
-    const property = await Property.create({
-      ...rest,
+    console.log('📥 Incoming property data (body):', req.body);
+    console.log('📸 Uploaded files:', req.files);
+
+    const {
       title,
+      listingType,
+      estate,
+      county,
+      price,
+      bedrooms,
+      bathrooms,
+      parking,
+      sqft,
+      description,
+      amenities,
+      propertyType,
+      size,
+      status
+    } = req.body;
+
+    // ── Validate required fields ──────────────────────────────
+    if (!title || !listingType || !estate || !price || !description) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: title, listingType, estate, price, description'
+      });
+    }
+
+    // ── Generate slug ──────────────────────────────────────────
+    const slug = await generateUniqueSlug(title);
+
+    // ── Extract image URLs from Cloudinary upload ─────────────
+    const imageUrls = req.files ? req.files.map(file => file.path) : [];
+
+    // ── Parse amenities (if sent as JSON string) ──────────────
+    let amenitiesArray = [];
+    if (amenities) {
+      try {
+        amenitiesArray = typeof amenities === 'string' ? JSON.parse(amenities) : amenities;
+      } catch (e) {
+        amenitiesArray = [];
+      }
+    }
+
+    // ── Build property object ──────────────────────────────────
+    const propertyData = {
       ownerId: req.user._id,
+      title,
       slug,
-      status: 'pending' // new listings require moderation
-    });
-    
+      listingType,
+      estate,
+      county: county || 'Nairobi',
+      price: parseFloat(price),
+      bedrooms: bedrooms ? parseInt(bedrooms) : 0,
+      bathrooms: bathrooms ? parseInt(bathrooms) : 0,
+      parking: parking ? parseInt(parking) : 0,
+      sqft: sqft ? parseFloat(sqft) : 0,
+      description,
+      images: imageUrls,
+      amenities: amenitiesArray,
+      propertyType: propertyType || 'apartment',
+      status: status || 'pending' // new listings require moderation
+    };
+
+    console.log('📦 Property data to save:', propertyData);
+
+    const property = await Property.create(propertyData);
+
     res.status(201).json({ success: true, property });
   } catch (error) {
-    console.error('Error creating property:', error);
+    console.error('❌ Property creation error FULL:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Error stack:', error.stack);
+
     if (error.name === 'ValidationError') {
-      return res.status(400).json({ success: false, error: error.message });
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+        fields: Object.keys(error.errors)
+      });
     }
-    res.status(500).json({ success: false, error: 'Server error creating property' });
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Duplicate property (slug already exists)'
+      });
+    }
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.status(500).json({
+      success: false,
+      error: isProduction
+        ? 'Server error creating property. Please try again later.'
+        : error.message,
+      ...(isProduction ? {} : { stack: error.stack })
+    });
   }
 });
 
-// @route   GET /api/properties/my-properties
-// @desc    Get all properties for the logged in user (with pagination)
+// ─── GET /api/properties/my-properties (authenticated) ────────
 router.get('/my-properties', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
-    
+
     const [properties, total] = await Promise.all([
       Property.find({ ownerId: req.user._id })
         .skip(skip)
@@ -147,7 +244,7 @@ router.get('/my-properties', authMiddleware, async (req, res) => {
         .lean(),
       Property.countDocuments({ ownerId: req.user._id })
     ]);
-    
+
     res.json({
       success: true,
       count: properties.length,
@@ -162,32 +259,31 @@ router.get('/my-properties', authMiddleware, async (req, res) => {
   }
 });
 
-// @route   PUT /api/properties/:id
-// @desc    Update a property (owner or admin)
+// ─── PUT /api/properties/:id (authenticated, owner or admin) ──
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     let property = await Property.findById(req.params.id);
     if (!property) {
       return res.status(404).json({ success: false, error: 'Property not found' });
     }
-    
+
     // Check ownership or admin
     if (property.ownerId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Not authorized to update this property' });
     }
-    
+
     // If title is being updated, regenerate slug
     let updateData = { ...req.body };
     if (req.body.title && req.body.title !== property.title) {
       updateData.slug = await generateUniqueSlug(req.body.title, property._id);
     }
-    
+
     const updatedProperty = await Property.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
     );
-    
+
     res.json({ success: true, property: updatedProperty });
   } catch (error) {
     console.error('Error updating property:', error);
@@ -198,22 +294,21 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/properties/:id
-// @desc    Soft delete (archive) a property (owner or admin)
+// ─── DELETE /api/properties/:id (authenticated, owner or admin) ──
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const property = await Property.findById(req.params.id);
     if (!property) {
       return res.status(404).json({ success: false, error: 'Property not found' });
     }
-    
+
     if (property.ownerId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Not authorized to delete this property' });
     }
-    
+
     property.status = 'archived';
     await property.save();
-    
+
     res.json({ success: true, message: 'Property archived' });
   } catch (error) {
     console.error('Error deleting property:', error);
