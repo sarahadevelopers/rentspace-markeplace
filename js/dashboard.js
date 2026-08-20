@@ -478,13 +478,20 @@ const FormManager = {
 // =========================
 const PropertyAPI = {
     async fetchMyProperties() {
-        const res = await authFetch(`${API_BASE}/api/properties/my-properties`);
-        if (!res.ok) {
-            const err = await res.text();
-            throw new Error(err || 'Failed to fetch properties');
-        }
-        return await res.json();
-    },
+    const res = await authFetch(`${API_BASE}/api/properties/my-properties`);
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err || 'Failed to fetch properties');
+    }
+    const data = await res.json();
+    console.log('📥 API response:', data); // 👈 Add this to see what's returned
+    // ── Ensure we return an array ──────────────────────────────
+    if (Array.isArray(data)) return data;
+    if (data.properties && Array.isArray(data.properties)) return data.properties;
+    if (data.success && Array.isArray(data.data)) return data.data;
+    if (data.error) throw new Error(data.error);
+    return []; // fallback
+},
 
     async getPropertyById(id) {
         const res = await authFetch(`${API_BASE}/api/properties/${id}`);
