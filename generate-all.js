@@ -1,4 +1,4 @@
-// generate-all.js - Complete unified generator
+// generate-all.js - Complete unified generator (final SEO tweaks)
 const fs = require('fs');
 const path = require('path');
 
@@ -44,10 +44,49 @@ function escapeHtml(str) {
     });
 }
 
+// Helper to generate descriptive alt text for thumbnails (unique per property)
+function getAltTextForThumbnail(idx, prop, isRental = true) {
+    // Use the full property title (unique) for the base description
+    const uniqueTitle = isRental ? prop.title : (prop.title.split(' – ')[0] || prop.title);
+    
+    // Descriptor based on image index (flexible for various room types)
+    const altMap = [
+        'Living area',
+        'Master bedroom',
+        'Kitchen',
+        'Bathroom',
+        'Exterior view',
+        'Additional view',
+        'Dining area',
+        'Bedroom',
+        'Compound view'
+    ];
+    const descriptor = altMap[idx] || `View ${idx + 1}`;
+    
+    // Combine: "Living area of 2 Bedroom Apartment to Let in Kitengela"
+    return `${descriptor} of ${uniqueTitle}`;
+}
+
 // ========== GENERATE RENTAL PAGES (to /property/) ==========
 console.log('\n📝 Generating Rental Pages...');
 rentals.forEach(prop => {
     let page = rentalTemplate;
+    
+    // Additional computed fields for SEO
+    const numericPrice = prop.price?.toString().replace(/,/g, '') || '0';
+    const estateSlug = prop.estate.toLowerCase();
+
+    // Determine schema type: "House" for bungalows/maisonettes/mansions, otherwise "Apartment"
+let schemaType = 'Apartment';
+const propertyType = (prop.type || '').toLowerCase();
+if (propertyType.includes('bungalow') || propertyType.includes('maisonette') || propertyType.includes('mansion')) {
+    schemaType = 'House';
+}
+// Also check title for safety
+const titleLower = (prop.title || '').toLowerCase();
+if (titleLower.includes('bungalow') || titleLower.includes('maisonette') || titleLower.includes('mansion')) {
+    schemaType = 'House';
+}
     
     // Basic replacements
     page = page.replace(/\{\{title\}\}/g, escapeHtml(prop.title));
@@ -62,37 +101,55 @@ rentals.forEach(prop => {
     page = page.replace(/\{\{encodedTitle\}\}/g, encodeURIComponent(prop.title));
     page = page.replace(/\{\{fumigationLink\}\}/g, prop.fumigationLink || 'https://fumigo.co.ke');
     
-    // Features
+    // SEO fields
+    const seoTitle = prop.seo_title || `${prop.title} – KES ${prop.price?.toLocaleString()}/mo | RentSpace`;
+    const metaDesc = prop.meta_description || (prop.description || '').substring(0, 150);
+    page = page.replace(/\{\{seo_title\}\}/g, escapeHtml(seoTitle));
+    page = page.replace(/\{\{meta_description\}\}/g, escapeHtml(metaDesc));
+    
+    // Why rent section
+    const whyRent = prop.why_rent || '';
+    const whyRentDisplay = whyRent ? 'block' : 'none';
+    page = page.replace(/\{\{why_rent\}\}/g, escapeHtml(whyRent));
+    page = page.replace(/\{\{why_rent_display\}\}/g, whyRentDisplay);
+    
+    // Features list
     let featuresHtml = '';
     if (prop.features && prop.features.length) {
         featuresHtml = prop.features.map(f => `<li>${escapeHtml(f)}</li>`).join('');
     } else {
         featuresHtml = '<li>Tiled Floors</li><li>Water Heater</li><li>Secure Parking</li><li>24/7 Security</li>';
     }
-    page = page.replace(/\{\{#each features\}\}[\s\S]*?\{\{\/each\}\}/, featuresHtml);
+    page = page.replace(/\{\{featuresList\}\}/g, featuresHtml);
     
-    // ========== FIXED: Generate Gallery HTML for Rental Pages ==========
+    // ========== Generate Gallery HTML for Rental Pages ==========
     let mainImageHtml = '';
     let thumbnailsHtml = '';
+    let mainImageUrl = '';
     
     if (prop.images && prop.images.length) {
-        // Main image (first one)
-        mainImageHtml = `<img src="${prop.images[0]}" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
+        mainImageUrl = prop.images[0];
+        mainImageHtml = `<img src="${mainImageUrl}" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
         
-        // Thumbnails (all images)
-        thumbnailsHtml = prop.images.map((img, idx) => `
-            <div class="thumb" data-index="${idx}">
-                <img src="${img}" alt="View ${idx}" loading="lazy">
-            </div>
-        `).join('');
+        // Generate thumbnails with unique alt text per image
+        thumbnailsHtml = prop.images.map((img, idx) => {
+            const altText = getAltTextForThumbnail(idx, prop, true);
+            return `<div class="thumb" data-index="${idx}"><img src="${img}" alt="${altText}" loading="lazy"></div>`;
+        }).join('');
     } else {
-        mainImageHtml = `<img src="/images/placeholder.jpg" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
-        thumbnailsHtml = `<div class="thumb" data-index="0"><img src="/images/placeholder.jpg" alt="View 0" loading="lazy"></div>`;
+        mainImageUrl = '/images/placeholder.jpg';
+        mainImageHtml = `<img src="${mainImageUrl}" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
+        thumbnailsHtml = `<div class="thumb" data-index="0"><img src="${mainImageUrl}" alt="No image available" loading="lazy"></div>`;
     }
     
-    // Replace gallery placeholders
     page = page.replace(/\{\{mainImage\}\}/, mainImageHtml);
     page = page.replace(/\{\{thumbnails\}\}/, thumbnailsHtml);
+    page = page.replace(/\{\{mainImageUrl\}\}/g, mainImageUrl);
+    
+    // NEW: numeric price and lowercase estate slug for schema
+    page = page.replace(/\{\{numericPrice\}\}/g, numericPrice);
+page = page.replace(/\{\{estateSlug\}\}/g, estateSlug);
+page = page.replace(/\{\{schemaType\}\}/g, schemaType);
     
     // Recommendations
     const similarRentals = rentals.filter(r => r.id !== prop.id && r.estate === prop.estate).slice(0, 4);
@@ -109,7 +166,7 @@ rentals.forEach(prop => {
             </div>
         </a>`;
     });
-    page = page.replace(/\{\{#each recommendations\}\}[\s\S]*?\{\{\/each\}\}/, recsHtml);
+    page = page.replace(/\{\{recommendations\}\}/g, recsHtml);
     
     // Reviews
     const reviews = prop.reviews || [];
@@ -126,8 +183,20 @@ rentals.forEach(prop => {
                 <span>Verified Client</span>
             </div>
         </div>`).join('');
+    } else {
+        reviewsHtml = `
+        <div class="testimonial-card">
+            <div class="testimonial-content">
+                <i class="fas fa-quote-left"></i>
+                <p>"Great property, exactly as described. The team was responsive and professional."</p>
+            </div>
+            <div class="testimonial-author">
+                <strong>Verified Client</strong>
+                <span>RentSpace Tenant</span>
+            </div>
+        </div>`;
     }
-    page = page.replace(/\{\{#each reviews\}\}[\s\S]*?\{\{\/each\}\}/, reviewsHtml);
+    page = page.replace(/\{\{reviews\}\}/g, reviewsHtml);
     
     const outputPath = path.join(RENTAL_OUTPUT_DIR, `${prop.slug}.html`);
     fs.writeFileSync(outputPath, page);
@@ -161,99 +230,141 @@ airbnbs.forEach(prop => {
     page = page.replace(/\{\{host_name\}\}/g, prop.host_name || 'RentSpace Premier Host');
     page = page.replace(/\{\{host_response_rate\}\}/g, prop.host_response_rate || 98);
     page = page.replace(/\{\{host_response_time\}\}/g, prop.host_response_time || 'within an hour');
-    page = page.replace(/\{\{check_in_time\}\}/g, prop.check_in_time || '2:00 PM');
-    page = page.replace(/\{\{check_out_time\}\}/g, prop.check_out_time || '10:00 AM');
+    
     page = page.replace(/\{\{cancellation_policy\}\}/g, prop.cancellation_policy || 'Free cancellation for 48 hours');
     
-    // ========== Generate Gallery HTML for Airbnb Pages ==========
-    let mainImageHtml = '';
-    let thumbnailsHtml = '';
+    // SEO fields for Airbnb
+    const seoTitle = prop.seo_title || `${prop.title} – KES ${nightlyRate}/night | RentSpace`;
+    const metaDesc = prop.meta_description || (prop.description || '').substring(0, 150);
+    page = page.replace(/\{\{seo_title\}\}/g, escapeHtml(seoTitle));
+    page = page.replace(/\{\{meta_description\}\}/g, escapeHtml(metaDesc));
     
-    if (prop.images && prop.images.length) {
-        // Main image (first one)
-        mainImageHtml = `<img src="${prop.images[0]}" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
-        
-        // Thumbnails (all images)
-        thumbnailsHtml = prop.images.map((img, idx) => `
-            <div class="thumb" data-index="${idx}">
-                <img src="${img}" alt="View ${idx}" loading="lazy">
-            </div>
-        `).join('');
-    } else {
-        mainImageHtml = `<img src="/images/placeholder.jpg" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
-        thumbnailsHtml = `<div class="thumb" data-index="0"><img src="/images/placeholder.jpg" alt="View 0" loading="lazy"></div>`;
-    }
+    // Why rent section (optional for Airbnb)
+    const whyRent = prop.why_rent || '';
+    const whyRentDisplay = whyRent ? 'block' : 'none';
+    page = page.replace(/\{\{why_rent\}\}/g, escapeHtml(whyRent));
+    page = page.replace(/\{\{why_rent_display\}\}/g, whyRentDisplay);
     
-    // Replace gallery placeholders
-    page = page.replace(/\{\{mainImage\}\}/, mainImageHtml);
-    page = page.replace(/\{\{thumbnails\}\}/, thumbnailsHtml);
+    // Weekly discount display
+    const weeklyDisplay = prop.price_week ? 'block' : 'none';
+    page = page.replace(/\{\{weekly_display\}\}/g, weeklyDisplay);
     
-    // Features
+    // Superhost badge display
+    const superhostDisplay = prop.airbnb_superhost ? 'block' : 'none';
+    page = page.replace(/\{\{superhost_display\}\}/g, superhostDisplay);
+    
+    // Features list (as HTML list items)
     let featuresHtml = '';
     if (prop.features && prop.features.length) {
         featuresHtml = prop.features.map(f => `<li>${escapeHtml(f)}</li>`).join('');
     } else {
         featuresHtml = '<li>Tiled Floors</li><li>Water Heater</li><li>Secure Parking</li><li>24/7 Security</li><li>High-speed WiFi</li>';
     }
-    page = page.replace(/\{\{#each features\}\}[\s\S]*?\{\{\/each\}\}/, featuresHtml);
+    page = page.replace(/\{\{features_html\}\}/g, featuresHtml);
     
-    // Amenities
-    const amenities = [
-        { icon: 'fa-wifi', name: 'High-speed WiFi' },
-        { icon: 'fa-tv', name: 'Smart TV' },
-        { icon: 'fa-snowflake', name: 'Air conditioning' },
-        { icon: 'fa-utensils', name: 'Fully equipped kitchen' },
-        { icon: 'fa-parking', name: 'Free parking' },
-        { icon: 'fa-shield-alt', name: '24/7 security' }
-    ];
+    // Amenities grid (full HTML)
     let amenitiesHtml = '';
-    amenities.forEach(a => {
-        amenitiesHtml += `<div class="amenity-item"><i class="fas ${a.icon}"></i><span>${a.name}</span></div>`;
-    });
-    page = page.replace(/\{\{#each amenities\}\}[\s\S]*?\{\{\/each\}\}/, amenitiesHtml);
+    if (prop.short_stay_amenities && prop.short_stay_amenities.length) {
+        amenitiesHtml = prop.short_stay_amenities.map(a => `
+            <div class="amenity-item">
+                <i class="fas fa-check-circle"></i>
+                <span>${escapeHtml(a)}</span>
+            </div>
+        `).join('');
+    } else {
+        // Fallback amenities
+        amenitiesHtml = `
+            <div class="amenity-item"><i class="fas fa-wifi"></i><span>High-speed WiFi</span></div>
+            <div class="amenity-item"><i class="fas fa-tv"></i><span>Smart TV</span></div>
+            <div class="amenity-item"><i class="fas fa-utensils"></i><span>Kitchenette</span></div>
+            <div class="amenity-item"><i class="fas fa-parking"></i><span>Free parking</span></div>
+        `;
+    }
+    page = page.replace(/\{\{amenities_html\}\}/g, amenitiesHtml);
     
-    // Superhost badge
-    const superhostHtml = '<div class="superhost-badge"><i class="fas fa-medal"></i> Superhost</div>';
-    page = page.replace(/\{\{#if superhost\}\}[\s\S]*?\{\{\/if\}\}/, superhostHtml);
+    // ========== Generate Gallery HTML for Airbnb Pages ==========
+    let mainImageHtml = '';
+    let thumbnailsHtml = '';
+    let mainImageUrl = '';
     
-    // Similar Airbnb recommendations
+    if (prop.images && prop.images.length) {
+        mainImageUrl = prop.images[0];
+        mainImageHtml = `<img src="${mainImageUrl}" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
+        
+        // Use the same helper for Airbnb thumbnails (pass isRental=false)
+        thumbnailsHtml = prop.images.map((img, idx) => {
+            const altText = getAltTextForThumbnail(idx, prop, false);
+            return `<div class="thumb" data-index="${idx}"><img src="${img}" alt="${altText}" loading="lazy"></div>`;
+        }).join('');
+    } else {
+        mainImageUrl = '/images/placeholder.jpg';
+        mainImageHtml = `<img src="${mainImageUrl}" alt="${escapeHtml(prop.title)}" id="mainGalleryImg" loading="lazy">`;
+        thumbnailsHtml = `<div class="thumb" data-index="0"><img src="${mainImageUrl}" alt="No image available" loading="lazy"></div>`;
+    }
+    
+    page = page.replace(/\{\{mainImage\}\}/, mainImageHtml);
+    page = page.replace(/\{\{thumbnails\}\}/, thumbnailsHtml);
+    page = page.replace(/\{\{mainImageUrl\}\}/g, mainImageUrl);
+    
+    // Similar stays (recommendations)
     const similarAirbnbs = airbnbs.filter(a => a.id !== prop.id && a.estate === prop.estate).slice(0, 3);
-    let recsHtml = '';
+    let similarStaysHtml = '';
     similarAirbnbs.forEach(rec => {
         const recNightly = rec.price_night || Math.round(rec.price / 30);
-        recsHtml += `
-        <a href="../airbnb/${rec.slug}.html" class="rec-card">
-            <div class="rec-card-image">
-                <img src="${rec.images?.[0] || '/images/placeholder.jpg'}" alt="${escapeHtml(rec.title)}">
-            </div>
-            <div class="rec-card-info">
-                <h4>${escapeHtml(rec.title)}</h4>
-                <p>${rec.estate} · KES ${recNightly.toLocaleString()} / night</p>
-                ${rec.airbnb_rating ? '<div class="rec-rating"><i class="fas fa-star"></i> ' + rec.airbnb_rating + '</div>' : ''}
-            </div>
-        </a>`;
+        similarStaysHtml += `
+            <a href="../airbnb/${rec.slug}.html" class="rec-card">
+                <div class="rec-card-image">
+                    <img src="${rec.images?.[0] || '/images/placeholder.jpg'}" alt="${escapeHtml(rec.title)}">
+                </div>
+                <div class="rec-card-info">
+                    <h4>${escapeHtml(rec.title)}</h4>
+                    <p>${rec.estate} · KES ${recNightly.toLocaleString()} / night</p>
+                    ${rec.airbnb_rating ? `<div class="rec-rating"><i class="fas fa-star"></i> ${rec.airbnb_rating}</div>` : ''}
+                </div>
+            </a>
+        `;
     });
-    page = page.replace(/\{\{#each recommendations\}\}[\s\S]*?\{\{\/each\}\}/, recsHtml);
+    const similarStaysDisplay = similarAirbnbs.length ? 'block' : 'none';
+    page = page.replace(/\{\{similar_stays_html\}\}/g, similarStaysHtml);
+    page = page.replace(/\{\{similar_stays_display\}\}/g, similarStaysDisplay);
     
-    // Reviews
-    const reviewsHtml = `
-    <div class="review-card">
-        <div class="review-header">
-            <strong>Sarah M.</strong>
-            <div class="review-rating"><i class="fas fa-star"></i> 5</div>
-        </div>
-        <p>"Amazing stay! The apartment was spotless and exactly as described. The host was very responsive."</p>
-        <span class="review-date">2 weeks ago</span>
-    </div>
-    <div class="review-card">
-        <div class="review-header">
-            <strong>James K.</strong>
-            <div class="review-rating"><i class="fas fa-star"></i> 4.8</div>
-        </div>
-        <p>"Great location and value for money. Highly recommended for short stays in Nairobi."</p>
-        <span class="review-date">1 month ago</span>
-    </div>`;
-    page = page.replace(/\{\{#each reviews\}\}[\s\S]*?\{\{\/each\}\}/, reviewsHtml);
+    // Guest reviews
+    let reviewsHtml = '';
+    if (prop.reviews && prop.reviews.length) {
+        reviewsHtml = prop.reviews.map(r => `
+            <div class="review-card">
+                <div class="review-header">
+                    <strong>${escapeHtml(r.name)}</strong>
+                    <div class="review-rating"><i class="fas fa-star"></i> ${r.rating}</div>
+                </div>
+                <p>"${escapeHtml(r.comment)}"</p>
+                <span class="review-date">${escapeHtml(r.date)}</span>
+            </div>
+        `).join('');
+    } else {
+        // Fallback reviews
+        reviewsHtml = `
+            <div class="review-card">
+                <div class="review-header">
+                    <strong>Sarah M.</strong>
+                    <div class="review-rating"><i class="fas fa-star"></i> 5</div>
+                </div>
+                <p>"Great location and value. Would stay again!"</p>
+                <span class="review-date">2 weeks ago</span>
+            </div>
+            <div class="review-card">
+                <div class="review-header">
+                    <strong>James K.</strong>
+                    <div class="review-rating"><i class="fas fa-star"></i> 4.8</div>
+                </div>
+                <p>"Amazing stay! The apartment was spotless and exactly as described."</p>
+                <span class="review-date">1 month ago</span>
+            </div>
+        `;
+    }
+    const reviewsDisplay = 'block'; // Always show reviews section (even if fallback)
+    page = page.replace(/\{\{reviews_html\}\}/g, reviewsHtml);
+    page = page.replace(/\{\{reviews_display\}\}/g, reviewsDisplay);
     
     const outputPath = path.join(AIRBNB_OUTPUT_DIR, `${prop.slug}.html`);
     fs.writeFileSync(outputPath, page);
@@ -262,7 +373,7 @@ airbnbs.forEach(prop => {
 
 console.log('\n' + '='.repeat(50));
 console.log('🎉 GENERATION COMPLETE!');
-console.log('='.repeat(50));
+console.log('=' .repeat(50));
 console.log(`   📁 Rentals: ${RENTAL_OUTPUT_DIR} (${rentals.length} files)`);
 console.log(`   📁 Airbnb: ${AIRBNB_OUTPUT_DIR} (${airbnbs.length} files)`);
 console.log('\n💡 Next steps:');
