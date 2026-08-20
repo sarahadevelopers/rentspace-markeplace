@@ -307,20 +307,39 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       return;
     }
 
+    console.log('✅ Login successful, token received:', data.token);
+
     // ─── Store token ────────────────────────────────────────────
-    localStorage.setItem('rentspace_token', data.token);
-    localStorage.setItem('rentspace_user', JSON.stringify(data.user));
+    try {
+      localStorage.setItem('rentspace_token', data.token);
+      localStorage.setItem('rentspace_user', JSON.stringify(data.user));
+      console.log('✅ Token and user stored in localStorage.');
+    } catch (storageError) {
+      console.error('❌ Failed to store token in localStorage:', storageError);
+      errorBox.textContent = 'Could not save login session. Please try again.';
+      errorBox.style.display = 'block';
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+      return;
+    }
 
     // ─── Redirect to dashboard ──────────────────────────────────
     window.location.href = 'dashboard.html';
 
   } catch (err) {
+    console.error('Login fetch error:', err);
     errorBox.textContent = 'Network error. Please check your connection.';
     errorBox.style.display = 'block';
     loginBtn.disabled = false;
     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
   }
 });
+
+// Optional: add a manual test helper (visible in console)
+console.log('🔑 Login page ready – use the form above or test with:');
+console.log(
+  'fetch("https://rentspace-markeplace.onrender.com/api/auth/login", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({email:"info@rentspace.co.ke", password:"Admin123!"}) }).then(r=>r.json()).then(d=>console.log(d))'
+);
 </script>
 
 </body>
