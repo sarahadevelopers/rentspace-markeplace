@@ -158,23 +158,27 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
     }
 
     // ── 2. Subscription check (PAID-ONLY) ────────────────────────
-    const validPlans = ['basic', 'pro', 'developer'];
-    const userPlan = req.user.subscriptionPlan || 'free';
-    const userExpiry = req.user.subscriptionExpiry;
+    // ── 2. Subscription check (PAID-ONLY, admins bypass) ──────────
+const isAdmin = req.user.role === 'admin';
 
-    // Check if user has a valid paid subscription
-    let isPaid = validPlans.includes(userPlan);
-    if (isPaid && userExpiry) {
-      // If expiry is set, it must be in the future
-      isPaid = new Date(userExpiry) > new Date();
-    }
+if (!isAdmin) {
+  const validPlans = ['basic', 'pro', 'developer'];
+  const userPlan = req.user.subscriptionPlan || 'free';
+  const userExpiry = req.user.subscriptionExpiry;
 
-    if (!isPaid) {
-      return res.status(403).json({
-        success: false,
-        error: 'You need an active subscription to list properties. Please upgrade from your dashboard.'
-      });
-    }
+  let isPaid = validPlans.includes(userPlan);
+  if (isPaid && userExpiry) {
+    isPaid = new Date(userExpiry) > new Date();
+  }
+
+  if (!isPaid) {
+    return res.status(403).json({
+      success: false,
+      error: 'You need an active subscription to list properties. Please upgrade from your dashboard.'
+    });
+  }
+}
+    
 
     // ── 3. Generate slug ──────────────────────────────────────────
     const slug = await generateUniqueSlug(title);
@@ -259,14 +263,20 @@ router.get('/my-properties', authMiddleware, async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const [properties, total] = await Promise.all([
-      Property.find({ ownerId: req.user._id })
-        .skip(skip)
-        .limit(limitNum)
-        .sort({ createdAt: -1 })
-        .lean(),
-      Property.countDocuments({ ownerId: req.user._id })
-    ]);
+    let query = {};
+// If user is admin, show all properties; otherwise only their own
+if (req.user.role !== 'admin') {
+  query = { ownerId: req.user._id };
+}
+
+const [properties, total] = await Promise.all([
+  Property.find(query)
+    .skip(skip)
+    .limit(limitNum)
+    .sort({ createdAt: -1 })
+    .lean(),
+  Property.countDocuments(query)
+]);
 
     res.json({
       success: true,
