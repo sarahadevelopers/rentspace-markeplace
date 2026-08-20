@@ -105,6 +105,44 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ─── GET /api/properties/my-properties (authenticated) ────────
+// MUST be placed BEFORE /:slug to avoid conflict
+router.get('/my-properties', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    let query = {};
+    // If user is admin, show all properties; otherwise only their own
+    if (req.user.role !== 'admin') {
+      query = { ownerId: req.user._id };
+    }
+
+    const [properties, total] = await Promise.all([
+      Property.find(query)
+        .skip(skip)
+        .limit(limitNum)
+        .sort({ createdAt: -1 })
+        .lean(),
+      Property.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      count: properties.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      properties
+    });
+  } catch (error) {
+    console.error('Error fetching user properties:', error);
+    res.status(500).json({ success: false, error: 'Server error fetching your properties' });
+  }
+});
+
 // ─── GET /api/properties/:slug (public) ────────────────────────
 router.get('/:slug', async (req, res) => {
   try {
@@ -123,7 +161,6 @@ router.get('/:slug', async (req, res) => {
   }
 });
 
-// ─── POST /api/properties (authenticated, with image upload) ──
 // ─── POST /api/properties (authenticated, with image upload) ──
 router.post('/', authMiddleware, upload.array('images', 10), async (req, res) => {
   try {
@@ -157,28 +194,26 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       });
     }
 
-    // ── 2. Subscription check (PAID-ONLY) ────────────────────────
     // ── 2. Subscription check (PAID-ONLY, admins bypass) ──────────
-const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.role === 'admin';
 
-if (!isAdmin) {
-  const validPlans = ['basic', 'pro', 'developer'];
-  const userPlan = req.user.subscriptionPlan || 'free';
-  const userExpiry = req.user.subscriptionExpiry;
+    if (!isAdmin) {
+      const validPlans = ['basic', 'pro', 'developer'];
+      const userPlan = req.user.subscriptionPlan || 'free';
+      const userExpiry = req.user.subscriptionExpiry;
 
-  let isPaid = validPlans.includes(userPlan);
-  if (isPaid && userExpiry) {
-    isPaid = new Date(userExpiry) > new Date();
-  }
+      let isPaid = validPlans.includes(userPlan);
+      if (isPaid && userExpiry) {
+        isPaid = new Date(userExpiry) > new Date();
+      }
 
-  if (!isPaid) {
-    return res.status(403).json({
-      success: false,
-      error: 'You need an active subscription to list properties. Please upgrade from your dashboard.'
-    });
-  }
-}
-    
+      if (!isPaid) {
+        return res.status(403).json({
+          success: false,
+          error: 'You need an active subscription to list properties. Please upgrade from your dashboard.'
+        });
+      }
+    }
 
     // ── 3. Generate slug ──────────────────────────────────────────
     const slug = await generateUniqueSlug(title);
@@ -255,44 +290,6 @@ if (!isAdmin) {
   }
 });
 
-// ─── GET /api/properties/my-properties (authenticated) ────────
-router.get('/my-properties', authMiddleware, async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    let query = {};
-// If user is admin, show all properties; otherwise only their own
-if (req.user.role !== 'admin') {
-  query = { ownerId: req.user._id };
-}
-
-const [properties, total] = await Promise.all([
-  Property.find(query)
-    .skip(skip)
-    .limit(limitNum)
-    .sort({ createdAt: -1 })
-    .lean(),
-  Property.countDocuments(query)
-]);
-
-    res.json({
-      success: true,
-      count: properties.length,
-      total,
-      page: pageNum,
-      totalPages: Math.ceil(total / limitNum),
-      properties
-    });
-  } catch (error) {
-    console.error('Error fetching user properties:', error);
-    res.status(500).json({ success: false, error: 'Server error fetching your properties' });
-  }
-});
-
-// ─── PUT /api/properties/:id (authenticated, owner or admin) ──
 // ─── PUT /api/properties/:id (authenticated, owner or admin) ──
 router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) => {
   try {
