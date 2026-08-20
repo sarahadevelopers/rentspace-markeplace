@@ -122,7 +122,7 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error(error);
+    console.error('❌ Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
   }
 });
