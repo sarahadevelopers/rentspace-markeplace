@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
+const { sendSubscriptionConfirmationEmail } = require('../config/email');
 
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
@@ -53,6 +54,14 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         renewalDate: null
       });
       await subscription.save();
+
+      // Send free plan confirmation email
+      try {
+        await sendSubscriptionConfirmationEmail(user.email, user.name, plan, 0);
+        console.log(`✅ Free plan confirmation email sent to ${user.email}`);
+      } catch (emailError) {
+        console.error('❌ Failed to send free plan confirmation email:', emailError);
+      }
 
       return res.json({
         success: true,
@@ -176,6 +185,19 @@ router.post('/saraha-webhook', async (req, res) => {
         user.subscriptionExpiry = subscription.renewalDate;
         await user.save();
         console.log(`✅ User ${user.email} upgraded to ${subscription.plan}`);
+
+        // ─── Send confirmation email ──────────────────────────────
+        try {
+          await sendSubscriptionConfirmationEmail(
+            user.email,
+            user.name,
+            subscription.plan,
+            subscription.amount
+          );
+          console.log(`✅ Subscription confirmation email sent to ${user.email}`);
+        } catch (emailError) {
+          console.error('❌ Failed to send subscription confirmation email:', emailError);
+        }
       }
     } else {
       // Payment failed
