@@ -6,7 +6,7 @@ const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 
-// Plan definitions
+// ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
   free: { name: 'Free', listings: 2, price: 0, featured: false, analytics: false, badge: false },
   basic: { name: 'Basic', listings: 20, price: 2500, featured: false, analytics: true, badge: false },
@@ -14,14 +14,12 @@ const PLANS = {
   developer: { name: 'Developer', listings: Infinity, price: 10000, featured: true, analytics: true, badge: true }
 };
 
-// @route   GET /api/subscriptions/plans
-// @desc    Get available plans
+// ─── GET /api/subscriptions/plans ──────────────────────────────
 router.get('/plans', (req, res) => {
   res.json(PLANS);
 });
 
-// @route   POST /api/subscriptions/subscribe
-// @desc    Initiate STK push via Saraha Pay
+// ─── POST /api/subscriptions/subscribe ─────────────────────────
 router.post('/subscribe', authMiddleware, async (req, res) => {
   try {
     const { plan, phoneNumber } = req.body;
@@ -39,13 +37,12 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     const planData = PLANS[plan];
     const amount = planData.price;
 
-    // If plan is free, just upgrade and return
+    // ── Free plan ──────────────────────────────────────────────
     if (amount === 0) {
       user.subscriptionPlan = plan;
-      user.subscriptionExpiry = null; // or set to far future
+      user.subscriptionExpiry = null;
       await user.save();
 
-      // Create a free subscription record
       const subscription = new Subscription({
         userId,
         plan,
@@ -64,7 +61,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       });
     }
 
-    // Paid plan – initiate STK push
+    // ── Paid plan – initiate STK push via Saraha Pay service ──
     const transactionRef = `RENT-${uuidv4().slice(0, 8)}`;
 
     // Create pending subscription record
@@ -79,30 +76,36 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     });
     await subscription.save();
 
-    // Call Saraha Pay API
-    const SARAHA_API_URL = process.env.SARAHAPAY_ENVIRONMENT === 'production'
-      ? 'https://api.sarahapay.com/v1/stkpush'
-      : 'https://sandbox.sarahapay.com/v1/stkpush'; // adjust if sandbox exists
+    // ── Call Saraha Pay service ──────────────────────────────────
+    const SARAHA_BASE_URL = process.env.SARAHAPAY_BASE_URL || 'https://sarahapay.onrender.com';
+    const SARAHA_API_URL = `${SARAHA_BASE_URL}/api/pay`;
 
     const sarahaResponse = await axios.post(
       SARAHA_API_URL,
       {
+        name: `RentSpace ${plan} Subscription (${transactionRef})`,
         phone: phoneNumber,
-        amount: amount,
-        reference: transactionRef,
-        callback_url: `${process.env.BASE_URL}/api/subscriptions/saraha-webhook`
+        amount: amount
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.SARAHAPAY_API_SECRET}`,
+          'x-api-secret': process.env.SARAHAPAY_API_SECRET,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 15000
       }
     );
 
-    // Update subscription with response metadata
-    subscription.metadata = sarahaResponse.data;
-    await subscription.save();
+    // The service returns a transaction ID; store it as checkout_id
+    const checkoutId = sarahaResponse.data.transactionId || sarahaResponse.data.checkout_id;
+    if (checkoutId) {
+      subscription.metadata = {
+        ...subscription.metadata,
+        checkout_id: checkoutId,
+        sarahaResponse: sarahaResponse.data
+      };
+      await subscription.save();
+    }
 
     res.json({
       success: true,
@@ -117,25 +120,45 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
   }
 });
 
-// @route   POST /api/subscriptions/saraha-webhook
-// @desc    Webhook to confirm payment from Saraha Pay
+// ─── POST /api/subscriptions/saraha-webhook ─────────────────────
+// This endpoint receives callbacks from the Saraha Pay service.
+// The service must forward its callback payload (including checkout_id)
+// to this URL.
 router.post('/saraha-webhook', async (req, res) => {
   try {
-    const { reference, status, mpesa_receipt, amount } = req.body;
+    const payload = req.body;
+    console.log('📥 Webhook received:', payload);
 
-    // Find the subscription by transactionRef
-    const subscription = await Subscription.findOne({ transactionRef: reference });
+    // Extract fields (the service may send different keys)
+    const checkoutId = payload.checkout_id || payload.checkoutId || payload.transactionId;
+    const status = payload.status || payload.paymentStatus;
+    const mpesa_receipt = payload.mpesa_receipt || payload.receipt;
+    const amount = payload.amount;
+
+    if (!checkoutId) {
+      console.warn('⚠️ No checkout_id in webhook payload');
+      return res.status(400).json({ error: 'Missing checkout_id' });
+    }
+
+    // Find the subscription by checkout_id stored in metadata
+    let subscription = await Subscription.findOne({
+      'metadata.checkout_id': checkoutId
+    });
+
+    // Fallback: try by transactionRef if sent
+    if (!subscription && payload.reference) {
+      subscription = await Subscription.findOne({ transactionRef: payload.reference });
+    }
+
     if (!subscription) {
+      console.warn(`⚠️ No subscription found for checkout_id: ${checkoutId}`);
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
-    // Optional: verify webhook secret if Saraha Pay provides a signature header
-    // const signature = req.headers['x-saraha-signature'];
-    // if (signature !== process.env.WEBHOOK_SECRET) {
-    //   return res.status(401).json({ error: 'Invalid signature' });
-    // }
+    // Determine status
+    const isSuccess = status === 'paid' || status === 'completed' || status === 'SUCCESS';
 
-    if (status === 'paid' || status === 'completed') {
+    if (isSuccess) {
       // Update subscription
       subscription.status = 'active';
       subscription.paymentStatus = 'paid';
@@ -152,12 +175,14 @@ router.post('/saraha-webhook', async (req, res) => {
         user.subscriptionPlan = subscription.plan;
         user.subscriptionExpiry = subscription.renewalDate;
         await user.save();
+        console.log(`✅ User ${user.email} upgraded to ${subscription.plan}`);
       }
     } else {
       // Payment failed
       subscription.status = 'cancelled';
       subscription.paymentStatus = 'failed';
       await subscription.save();
+      console.log(`❌ Payment failed for subscription ${subscription._id}`);
     }
 
     // Always respond with 200 OK to acknowledge receipt
