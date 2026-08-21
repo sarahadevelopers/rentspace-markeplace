@@ -9,9 +9,9 @@ const Subscription = require('../models/Subscription');
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
   free: { name: 'Free', listings: 2, price: 0, featured: false, analytics: false, badge: false },
-  basic: { name: 'Basic', listings: 20, price: 2500, featured: false, analytics: true, badge: false },
-  pro: { name: 'Pro', listings: Infinity, price: 5000, featured: true, analytics: true, badge: true },
-  developer: { name: 'Developer', listings: Infinity, price: 10000, featured: true, analytics: true, badge: true }
+  basic: { name: 'Basic', listings: 20, price: 2, featured: false, analytics: true, badge: false },
+  pro: { name: 'Pro', listings: Infinity, price: 5, featured: true, analytics: true, badge: true },
+  developer: { name: 'Developer', listings: Infinity, price: 10, featured: true, analytics: true, badge: true }
 };
 
 // ─── GET /api/subscriptions/plans ──────────────────────────────
