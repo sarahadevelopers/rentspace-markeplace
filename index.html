@@ -242,9 +242,10 @@
         </div>
     </div>
 
-    <!-- ===== EXECUTIVE NAVBAR (CLEAN & PREMIUM) ===== -->
+    <!-- ===== EXECUTIVE NAVBAR (UPDATED WITH CTAs) ===== -->
     <nav class="exec-nav">
         <a href="index.html" class="nav-logo">Rent<span>Space</span><sup class="r-sup">®</sup></a>
+        
         <ul class="nav-links">
             
             <!-- FOR SALE -->
@@ -294,15 +295,31 @@
                 </ul>
             </li>
 
-            <!-- LOGIN / SIGNUP -->
-            <li><a href="login.html" class="nav-auth">Sign In</a></li>
-            <li><a href="signup.html" class="nav-cta">Get Started</a></li>
+            <!-- ===== MOBILE CTAs (Inside Nav Links) ===== -->
+            <div class="nav-actions">
+                <a href="login.html?redirect=dashboard" class="nav-cta-primary">
+                    <i class="fas fa-plus-circle"></i> Create Listing
+                </a>
+                <a href="login.html" class="nav-auth">Log In</a>
+                <a href="signup.html" class="nav-cta-secondary">Sign Up</a>
+            </div>
+
         </ul>
-        <div class="hamburger" id="hamburger">
-            <span></span>
-            <span></span>
-            <span></span>
+
+        <!-- ===== DESKTOP CTAs (Outside Nav Links) ===== -->
+        <div class="nav-actions-desktop">
+            <a href="login.html?redirect=dashboard" class="nav-cta-primary">
+                <i class="fas fa-plus-circle"></i> Create Listing
+            </a>
+            <a href="login.html" class="nav-auth">Log In</a>
+            <a href="signup.html" class="nav-cta-secondary">Sign Up</a>
         </div>
+
+        <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
     </nav>
 
     <!-- Overlay for closing menu -->
@@ -320,9 +337,9 @@
             <span class="hero-tag">Verified Listings</span>
             <h1 class="hero-title">Find Your Perfect <span>Home,</span></h1>
             <h2 class="title2" style="font-weight:300;">Apartments, Houses & Land for Sale & Rent</h2>
-            <a href="rentals.html" class="search-pill">
-                <i class="fas fa-search"></i>
-                <span>Explore Collection</span>
+            <a href="login.html?redirect=dashboard" class="search-pill">
+                 <i class="fas fa-plus-circle"></i> 
+                <span>Create Listing</span>
             </a>
         </div>
         <div class="slider-progress">
