@@ -133,11 +133,14 @@ function applyAllFilters() {
 }
 
 // ========== RENDER PROPERTY CARDS ==========
+// ========== RENDER PROPERTY CARDS ==========
 function renderProperties(properties) {
     const grid = document.getElementById('propertyGrid');
     const paginationDiv = document.getElementById('pagination');
+    const loadingSpinner = document.getElementById('loadingSpinner');
     
     if (!grid) return;
+    if (loadingSpinner) loadingSpinner.style.display = 'none';
     
     if (!properties || properties.length === 0) {
         grid.style.display = 'none';
@@ -161,20 +164,22 @@ function renderProperties(properties) {
     const totalPages = Math.ceil(properties.length / itemsPerPage);
     
     grid.innerHTML = paginated.map(prop => {
-        const nightPrice = prop.priceNight || Math.round(prop.price / 30);
+        // ===== FIXED: Use price directly as nightly rate =====
+        const nightPrice = prop.price || 0;
         const rating = prop.airbnb_rating || '4.9';
         const reviews = prop.airbnb_reviews || 25;
         const imageUrl = prop.images?.[0] || `${basePath}/images/placeholder.jpg`;
+        
         return `
             <a href="${basePath}/airbnb/${prop.slug}.html" class="property-card">
                 <div class="card-image-wrapper">
-                    <img class="card-image" src="${imageUrl}" alt="${escapeHtml(prop.title)}" loading="lazy">
+                    <img class="card-image" src="${imageUrl}" alt="${escapeHtml(prop.title)}" loading="lazy" onerror="this.src='${basePath}/images/placeholder.jpg'">
                     <div class="card-badge"><i class="fab fa-airbnb"></i> Short-stay</div>
                     <div class="card-price">KES ${nightPrice.toLocaleString()}<span>/night</span></div>
                 </div>
                 <div class="card-info">
                     <h3 class="card-title">${escapeHtml(prop.title)}</h3>
-                    <div class="card-location">${escapeHtml(prop.estate)}, Nairobi</div>
+                    <div class="card-location">${escapeHtml(prop.estate || 'Nairobi')}</div>
                     <div class="card-features">
                         <span><i class="fas fa-bed"></i> ${prop.bedrooms || 0}</span>
                         <span><i class="fas fa-bath"></i> ${prop.bathrooms || 0}</span>
@@ -228,7 +233,6 @@ function renderProperties(properties) {
         });
     }
 }
-
 // ========== ESCAPE HTML HELPER ==========
 function escapeHtml(str) {
     if (!str) return '';
