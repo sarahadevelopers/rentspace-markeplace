@@ -242,47 +242,59 @@
         </div>
     </div>
 
-    <!-- ===== EXECUTIVE NAVBAR ===== -->
+    <!-- ===== EXECUTIVE NAVBAR (CLEAN & PREMIUM) ===== -->
     <nav class="exec-nav">
         <a href="index.html" class="nav-logo">Rent<span>Space</span><sup class="r-sup">®</sup></a>
         <ul class="nav-links">
-            <!-- 1. FOR SALE -->
+            
+            <!-- FOR SALE -->
             <li class="dropdown">
-                <a href="#" class="dropdown-trigger">For Sale <i class="fas fa-chevron-down"></i></a>
+                <a href="sale.html" class="dropdown-trigger">For Sale <i class="fas fa-chevron-down"></i></a>
                 <ul class="dropdown-menu">
-                    <li><a href="rentals.html?listingType=sale">All For Sale</a></li>
-                    <li><a href="rentals.html?listingType=sale&propertyType=apartment">Apartments</a></li>
-                    <li><a href="rentals.html?listingType=sale&propertyType=bungalow">Bungalows</a></li>
+                    <li><a href="sale.html">All For Sale</a></li>
+                    <li><a href="sale.html?type=apartment">Apartments</a></li>
+                    <li><a href="sale.html?type=bungalow">Bungalows</a></li>
+                    <li><a href="sale.html?type=maisonette">Maisonettes</a></li>
+                    <li><a href="sale.html?type=villa">Villas</a></li>
                 </ul>
             </li>
 
-            <!-- 2. FOR RENT -->
+            <!-- FOR RENT -->
             <li class="dropdown">
-                <a href="#" class="dropdown-trigger">For Rent <i class="fas fa-chevron-down"></i></a>
+                <a href="rentals.html" class="dropdown-trigger">For Rent <i class="fas fa-chevron-down"></i></a>
                 <ul class="dropdown-menu">
-                    <li><a href="rentals.html?listingType=rent">All For Rent</a></li>
-                    <li><a href="rentals.html?listingType=rent&propertyType=apartment">Apartments</a></li>
-                    <li><a href="rentals.html?listingType=rent&propertyType=bungalow">Bungalows</a></li>
-                    <li><a href="rentals.html?listingType=rent&propertyType=maisonette">Maisonettes</a></li>
+                    <li><a href="rentals.html">All Rentals</a></li>
+                    <li><a href="rentals.html?type=apartment">Apartments</a></li>
+                    <li><a href="rentals.html?type=bungalow">Bungalows</a></li>
+                    <li><a href="rentals.html?type=maisonette">Maisonettes</a></li>
+                    <li><a href="rentals.html?type=studio">Studios</a></li>
                 </ul>
             </li>
 
-            <!-- 3. LAND (STANDALONE) -->
+            <!-- LAND -->
             <li class="dropdown">
-                <a href="#" class="dropdown-trigger">Land <i class="fas fa-chevron-down"></i></a>
+                <a href="land.html" class="dropdown-trigger">Land <i class="fas fa-chevron-down"></i></a>
                 <ul class="dropdown-menu">
-                    <li><a href="rentals.html?listingType=sale&propertyType=land-res">Residential Land</a></li>
-                    <li><a href="rentals.html?listingType=sale&propertyType=land-comm">Commercial Land</a></li>
+                    <li><a href="land.html">All Land</a></li>
+                    <li><a href="land.html?type=land-res">Residential</a></li>
+                    <li><a href="land.html?type=land-comm">Commercial</a></li>
+                    <li><a href="land.html?type=ranch">Agricultural</a></li>
                 </ul>
             </li>
 
-            <!-- 4. AIRBNB -->
-            <li><a href="airbnb.html">Airbnb</a></li>
+            <!-- AIRBNB -->
+            <li class="dropdown">
+                <a href="airbnb.html" class="dropdown-trigger">Airbnb <i class="fas fa-chevron-down"></i></a>
+                <ul class="dropdown-menu">
+                    <li><a href="airbnb.html">All Bnbs</a></li>
+                    <li><a href="airbnb.html?type=studio">Studio</a></li>
+                    <li><a href="airbnb.html?type=1-bedroom">1 Bedroom</a></li>
+                    <li><a href="airbnb.html?type=2-bedroom">2 Bedroom</a></li>
+                    <li><a href="airbnb.html?type=executive">Executive</a></li>
+                </ul>
+            </li>
 
-            <!-- 5. LOCATION INSIGHTS -->
-            <li><a href="blog.html">Location Insights</a></li>
-
-            <!-- 6. LOGIN / SIGNUP -->
+            <!-- LOGIN / SIGNUP -->
             <li><a href="login.html" class="nav-auth">Sign In</a></li>
             <li><a href="signup.html" class="nav-cta">Get Started</a></li>
         </ul>
@@ -358,11 +370,11 @@
         <!-- ===== ACTION TILES (UPDATED PREMIUM LAYOUT) ===== -->
         <div class="action-tiles">
             <!-- For Sale – LARGER on desktop -->
-            <a href="rentals.html?listingType=sale" class="tile" style="background-image: url('https://a0.muscache.com/im/pictures/hosting/Hosting-1371732753400489796/original/757cdd9e-4f91-4901-bb05-488296f98332.jpeg');" onerror="this.style.backgroundImage='linear-gradient(135deg, #1a1a1a, #0a0a0a)'">
+            <a href="sale.html" class="tile" style="background-image: url('https://a0.muscache.com/im/pictures/hosting/Hosting-1371732753400489796/original/757cdd9e-4f91-4901-bb05-488296f98332.jpeg');" onerror="this.style.backgroundImage='linear-gradient(135deg, #1a1a1a, #0a0a0a)'">
                 <span>🏡 For Sale</span>
             </a>
             <!-- For Rent -->
-            <a href="rentals.html?listingType=rent" class="tile" style="background-image: url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800');" onerror="this.style.backgroundImage='linear-gradient(135deg, #1a1a1a, #0a0a0a)'">
+            <a href="rentals.html" class="tile" style="background-image: url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800');" onerror="this.style.backgroundImage='linear-gradient(135deg, #1a1a1a, #0a0a0a)'">
                 <span>🏠 For Rent</span>
             </a>
             <!-- Airbnb -->
@@ -370,7 +382,7 @@
                 <span>✨ Airbnb</span>
             </a>
             <!-- Land -->
-            <a href="rentals.html?listingType=sale&propertyType=land-res" class="tile" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800');" onerror="this.style.backgroundImage='linear-gradient(135deg, #1a1a1a, #0a0a0a)'">
+            <a href="land.html" class="tile" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800');" onerror="this.style.backgroundImage='linear-gradient(135deg, #1a1a1a, #0a0a0a)'">
                 <span>🌍 Land</span>
             </a>
         </div>
@@ -378,7 +390,7 @@
         <!-- ===== FOR SALE SECTION ===== -->
         <div class="section-header">
             <span class="section-title">FOR SALE</span>
-            <a href="rentals.html?listingType=sale" class="section-link">View All</a>
+            <a href="sale.html" class="section-link">View All</a>
         </div>
         <div class="property-grid" id="saleGrid">
             <div class="grid-loading">
@@ -390,7 +402,7 @@
         <!-- ===== FOR RENT SECTION ===== -->
         <div class="section-header" style="margin-top: 40px;">
             <span class="section-title">FOR RENT</span>
-            <a href="rentals.html?listingType=rent" class="section-link">View All</a>
+            <a href="rentals.html" class="section-link">View All</a>
         </div>
         <div class="property-grid" id="rentGrid">
             <div class="grid-loading">
@@ -402,7 +414,7 @@
         <!-- ===== LAND SECTION ===== -->
         <div class="section-header" style="margin-top: 40px;">
             <span class="section-title">LAND</span>
-            <a href="rentals.html?listingType=sale&propertyType=land-res" class="section-link">View All</a>
+            <a href="land.html" class="section-link">View All</a>
         </div>
         <div class="property-grid" id="landGrid">
             <div class="grid-loading">
@@ -465,36 +477,39 @@
                 <p>Curating Nairobi's most exclusive residential transitions with discretion and excellence since 2018.</p>
             </div>
             <div class="footer-col">
-                <h4>For Sale</h4>
-                <a href="rentals.html?listingType=sale">All For Sale</a>
-                <a href="rentals.html?listingType=sale&propertyType=apartment">Apartments</a>
-                <a href="rentals.html?listingType=sale&propertyType=bungalow">Bungalows</a>
-            </div>
-            <div class="footer-col">
-                <h4>For Rent</h4>
-                <a href="rentals.html?listingType=rent">All For Rent</a>
-                <a href="rentals.html?listingType=rent&propertyType=apartment">Apartments</a>
-                <a href="rentals.html?listingType=rent&propertyType=maisonette">Maisonettes</a>
+                <h4>Portfolio</h4>
+                <a href="sale.html">For Sale</a>
+                <a href="rentals.html">For Rent</a>
+                <a href="land.html">Land</a>
                 <a href="airbnb.html">Airbnb</a>
             </div>
             <div class="footer-col">
-                <h4>Land</h4>
-                <a href="rentals.html?listingType=sale&propertyType=land-res">Residential Land</a>
-                <a href="rentals.html?listingType=sale&propertyType=land-comm">Commercial Land</a>
+                <h4>Explore by Area</h4>
+                <a href="location/karen.html">Karen</a>
+                <a href="location/kilimani.html">Kilimani</a>
+                <a href="location/hurlingham.html">Hurlingham</a>
+                <a href="location/syokimau.html">Syokimau</a>
+                <a href="location/ngong.html">Ngong</a>
+                <a href="location/kitengela.html">Kitengela</a>
+            </div>
+            <div class="footer-col">
+                <h4>Services</h4>
+                <a href="movers.html">Movers &amp; Packers</a>
+                <a href="https://fumigo.co.ke" target="_blank">Fumigation</a>
+                <a href="blog.html">Location Insights</a>
             </div>
             <div class="footer-col">
                 <h4>Company</h4>
                 <a href="about.html">About Us</a>
-                <a href="blog.html">Location Insights</a>
-                <a href="movers.html">Movers &amp; Packers</a>
-                <a href="https://fumigo.co.ke" target="_blank">Fumigation</a>
+                <a href="contact.html">Contact Us</a>
+                <a href="privacy.html">Privacy Policy</a>
+                <a href="terms.html">Terms of Service</a>
             </div>
             <div class="footer-col">
                 <h4>Contact</h4>
                 <a href="tel:+254723562484">+254 723 562 484</a>
                 <a href="mailto:info@rentspace.co.ke">info@rentspace.co.ke</a>
-                <a href="login.html">Sign In</a>
-                <a href="signup.html">Get Started</a>
+                <a href="https://wa.me/254723562484" target="_blank">WhatsApp</a>
             </div>
         </div>
         <div class="footer-bottom">
@@ -509,17 +524,16 @@
         <span>Chat with Support</span>
     </a>
 
-    <!-- ===== MOBILE BOTTOM NAVIGATION (UPDATED) ===== -->
+    <!-- ===== MOBILE BOTTOM NAVIGATION ===== -->
     <div class="mobile-bottom-nav">
         <a href="index.html"><i class="fas fa-home"></i> Home</a>
-        <a href="rentals.html?listingType=sale"><i class="fas fa-tag"></i> Sale</a>
-        <a href="rentals.html?listingType=rent"><i class="fas fa-home"></i> Rent</a>
-        <a href="rentals.html?listingType=sale&propertyType=land-res"><i class="fas fa-map-pin"></i> Land</a>
+        <a href="sale.html"><i class="fas fa-tag"></i> Sale</a>
+        <a href="rentals.html"><i class="fas fa-home"></i> Rent</a>
+        <a href="land.html"><i class="fas fa-map-pin"></i> Land</a>
         <a href="airbnb.html"><i class="fab fa-airbnb"></i> Airbnb</a>
-        <!-- SUPPORT button – distinct WhatsApp green, text changed to "Support" -->
         <a href="https://wa.me/254723562484" class="support-link"><i class="fab fa-whatsapp"></i> Support</a>
     </div>
 
-   <script src="js/index.js?v=2"></script>
+    <script src="js/index.js?v=2"></script>
 </body>
 </html>
