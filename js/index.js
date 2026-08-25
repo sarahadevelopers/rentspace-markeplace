@@ -15,7 +15,7 @@ const getBasePath = () => {
 const basePath = getBasePath();
 
 // API base URL
-const API_BASE = 'https://rentspace-marketplace.onrender.com/api'; // Fixed typo
+const API_BASE = 'https://rentspace-markeplace.onrender.com/api'; // Fixed typo
 
 // ========== SPLASH SCREEN ==========
 function hideSplash() {
