@@ -2,7 +2,6 @@
 // RENTSPACE - PREMIUM INDEX PAGE
 // ============================================
 
-// Dynamic year
 document.getElementById('year').textContent = new Date().getFullYear();
 
 // ========== DYNAMIC PATH HELPER ==========
@@ -123,7 +122,6 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
         const data = await response.json();
         let properties = data.properties || [];
 
-        // Shuffle for variety
         properties = shuffleArray(properties);
 
         if (properties.length === 0) {
@@ -147,14 +145,23 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
 
             const formattedPrice = prop.price ? prop.price.toLocaleString() : '0';
 
-            // ===== FIX: Determine correct folder for the property =====
-            // Airbnb properties are in /airbnb/, all others in /property/
+            // ===== ROBUST FOLDER LOGIC =====
             let folder = 'property';
-            if (prop.propertyType === 'airbnb' || prop.listingType === 'airbnb') {
+            
+            // Debug: log to console
+            console.log(`🔍 ${prop.title} | propertyType: ${prop.propertyType} | listingType: ${prop.listingType}`);
+
+            // Check multiple fields for Airbnb (case-insensitive)
+            const isAirbnb = 
+                (prop.propertyType && prop.propertyType.toLowerCase().includes('airbnb')) ||
+                (prop.listingType && prop.listingType.toLowerCase().includes('airbnb')) ||
+                (prop.category && prop.category.toLowerCase().includes('airbnb')) ||
+                (prop.slug && prop.slug.includes('airbnb'));
+
+            if (isAirbnb) {
                 folder = 'airbnb';
+                console.log(`✅ ${prop.title} → routing to /airbnb/`);
             }
-            // Also check if it's land (though those should be in /property/)
-            // This is just a safeguard
 
             return `
                 <a href="${basePath}/${folder}/${prop.slug}.html" class="property-card">
@@ -214,11 +221,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initHeroSlider();
     initMobileDropdowns();
 
-    // Load the three distinct grids matching the new HTML
     loadPropertyGrid('saleGrid', { listingType: 'sale', limit: 8 });
     loadPropertyGrid('rentGrid', { listingType: 'rent', limit: 8 });
     loadPropertyGrid('landGrid', { listingType: 'sale', propertyType: 'land-res', limit: 6 });
 });
 
-// Re-initialize dropdowns on resize
 window.addEventListener('resize', initMobileDropdowns);
