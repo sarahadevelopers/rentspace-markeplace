@@ -122,6 +122,18 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
         const data = await response.json();
         let properties = data.properties || [];
 
+        // ===== FALLBACK: If no properties with filters, try without filters =====
+        if (properties.length === 0 && Object.keys(filter).length > 0) {
+            console.warn(`⚠️ No properties found with filters for ${containerId}, fetching all...`);
+            const fallbackParams = new URLSearchParams({ status: 'approved', limit: limit });
+            const fallbackResponse = await fetch(`${API_BASE}/properties?${fallbackParams}`);
+            if (fallbackResponse.ok) {
+                const fallbackData = await fallbackResponse.json();
+                properties = fallbackData.properties || [];
+            }
+        }
+
+        // Shuffle for variety
         properties = shuffleArray(properties);
 
         if (properties.length === 0) {
@@ -141,27 +153,17 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
             else if (prop.listingType === 'sale') {
                 if (prop.propertyType?.includes('land')) badge = 'Land';
                 else badge = 'For Sale';
-            } else if (prop.propertyType === 'airbnb') badge = 'Short Stay';
+            } else if (prop.propertyType === 'airbnb' || prop.listingType === 'airbnb') badge = 'Short Stay';
 
             const formattedPrice = prop.price ? prop.price.toLocaleString() : '0';
 
-            // ===== ROBUST FOLDER LOGIC =====
+            // ===== Determine correct folder =====
             let folder = 'property';
-            
-            // Debug: log to console
-            console.log(`🔍 ${prop.title} | propertyType: ${prop.propertyType} | listingType: ${prop.listingType}`);
-
-            // Check multiple fields for Airbnb (case-insensitive)
             const isAirbnb = 
                 (prop.propertyType && prop.propertyType.toLowerCase().includes('airbnb')) ||
                 (prop.listingType && prop.listingType.toLowerCase().includes('airbnb')) ||
-                (prop.category && prop.category.toLowerCase().includes('airbnb')) ||
                 (prop.slug && prop.slug.includes('airbnb'));
-
-            if (isAirbnb) {
-                folder = 'airbnb';
-                console.log(`✅ ${prop.title} → routing to /airbnb/`);
-            }
+            if (isAirbnb) folder = 'airbnb';
 
             return `
                 <a href="${basePath}/${folder}/${prop.slug}.html" class="property-card">
