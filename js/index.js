@@ -8,14 +8,14 @@ document.getElementById('year').textContent = new Date().getFullYear();
 // ========== DYNAMIC PATH HELPER ==========
 const getBasePath = () => {
     if (window.location.hostname === 'sarahadevelopers.github.io') {
-        return '/rentspace-markeplace'; // Keep as 'markeplace' if that's your actual repo name
+        return '/rentspace-markeplace';
     }
     return '';
 };
 const basePath = getBasePath();
 
 // API base URL
-const API_BASE = 'https://rentspace-markeplace.onrender.com/api'; // Fixed typo
+const API_BASE = 'https://rentspace-markeplace.onrender.com/api';
 
 // ========== SPLASH SCREEN ==========
 function hideSplash() {
@@ -147,8 +147,17 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
 
             const formattedPrice = prop.price ? prop.price.toLocaleString() : '0';
 
+            // ===== FIX: Determine correct folder for the property =====
+            // Airbnb properties are in /airbnb/, all others in /property/
+            let folder = 'property';
+            if (prop.propertyType === 'airbnb' || prop.listingType === 'airbnb') {
+                folder = 'airbnb';
+            }
+            // Also check if it's land (though those should be in /property/)
+            // This is just a safeguard
+
             return `
-                <a href="${basePath}/property/${prop.slug}.html" class="property-card">
+                <a href="${basePath}/${folder}/${prop.slug}.html" class="property-card">
                     <div class="card-image">
                         <img src="${prop.images?.[0] || `${basePath}/images/placeholder.jpg`}" alt="${escapeHtml(prop.title)}" loading="lazy" onerror="this.src='${basePath}/images/placeholder.jpg'">
                         ${badge ? `<span class="card-badge">${badge}</span>` : ''}
@@ -208,7 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load the three distinct grids matching the new HTML
     loadPropertyGrid('saleGrid', { listingType: 'sale', limit: 8 });
     loadPropertyGrid('rentGrid', { listingType: 'rent', limit: 8 });
-    // Land: Include both residential and commercial if available, or just 'land-res' as per your current spec
     loadPropertyGrid('landGrid', { listingType: 'sale', propertyType: 'land-res', limit: 6 });
 });
 
