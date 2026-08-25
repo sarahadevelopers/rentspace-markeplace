@@ -26,7 +26,7 @@ function hideSplash() {
                 splash.style.display = 'none';
             }, 800);
         }
-    }, 2200);
+    }, 500);
 }
 
 // ========== HERO SLIDER ==========
