@@ -852,6 +852,235 @@
         height: 70px;
       }
     }
+    /* ===== SUBSCRIPTION CARD - PREMIUM VISUAL ===== */
+
+.subscription-card {
+  background: var(--dark-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+/* Gold accent glow */
+.subscription-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+}
+
+/* Card Header */
+.sub-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sub-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sub-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--white);
+  margin: 0;
+}
+.sub-header h3 i {
+  color: var(--gold);
+  margin-right: 8px;
+}
+.plan-badge {
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.plan-badge.active {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4CAF50;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+.plan-badge.inactive {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+.plan-status {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+.plan-status.active {
+  color: #4CAF50;
+  background: rgba(76, 175, 80, 0.1);
+}
+.plan-status.inactive {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+/* Plan Details Grid */
+.plan-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.plan-detail-item {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: var(--transition);
+}
+.plan-detail-item:hover {
+  border-color: var(--gold);
+  background: rgba(197, 160, 89, 0.05);
+}
+.plan-detail-item .detail-icon {
+  font-size: 14px;
+  color: var(--gold);
+  margin-bottom: 2px;
+}
+.plan-detail-item .detail-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-light);
+}
+.plan-detail-item .detail-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--white);
+}
+.plan-detail-item .detail-value small {
+  font-weight: 400;
+  color: var(--text-light);
+  font-size: 13px;
+}
+
+/* Progress Bar */
+.sub-progress-wrapper {
+  margin: 4px 0 20px 0;
+}
+.sub-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-light);
+  margin-bottom: 6px;
+}
+.sub-progress {
+  background: rgba(255,255,255,0.06);
+  border-radius: 20px;
+  height: 8px;
+  overflow: hidden;
+  position: relative;
+}
+.sub-progress-bar {
+  height: 100%;
+  border-radius: 20px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 0%;
+}
+/* Danger state when > 80% */
+.sub-progress-bar.danger {
+  background: linear-gradient(90deg, #ffc107, #ff6b6b);
+}
+/* Near full state */
+.sub-progress-bar.warning {
+  background: linear-gradient(90deg, #ffc107, #ff9800);
+}
+.sub-progress-footer {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Actions */
+.sub-actions {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 4px;
+}
+.upgrade-msg {
+  background: rgba(197, 160, 89, 0.08);
+  border-left: 3px solid var(--gold);
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--text-light);
+}
+.upgrade-msg i {
+  color: var(--gold);
+  margin-right: 8px;
+}
+.btn-upgrade {
+  background: var(--gold);
+  color: var(--dark);
+  border: none;
+  padding: 12px 28px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 15px;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  cursor: pointer;
+}
+.btn-upgrade:hover {
+  background: var(--gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(197, 160, 89, 0.25);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .subscription-card {
+    padding: 18px 16px;
+  }
+  .sub-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .plan-details-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .plan-detail-item {
+    padding: 10px 12px;
+  }
+  .plan-detail-item .detail-value {
+    font-size: 14px;
+  }
+}
+@media (max-width: 480px) {
+  .plan-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
   </style>
 </head>
 <body>
@@ -876,37 +1105,83 @@
 <main class="admin-container">
 
   <!-- ===== SUBSCRIPTION SECTION ===== -->
-  <section class="subscription-section">
-    <div class="subscription-card" id="subscriptionCard">
-      <div class="sub-header">
+  <!-- ===== SUBSCRIPTION SECTION ===== -->
+<section class="subscription-section">
+  <div class="subscription-card" id="subscriptionCard">
+    
+    <!-- Card Header -->
+    <div class="sub-header">
+      <div class="sub-header-left">
         <h3><i class="fas fa-crown"></i> Your Plan</h3>
         <span class="plan-badge" id="planBadge">Free</span>
       </div>
-      <div class="sub-body">
-        <div class="plan-details">
-          <p><strong>Plan:</strong> <span id="currentPlan">No Active Subscription</span></p>
-          <p><strong>Status:</strong> <span id="planStatus" class="status-inactive">Inactive</span></p>
-          <p><strong>Expires:</strong> <span id="planExpiry">—</span></p>
-          <p><strong>Listings used:</strong> <span id="listingsUsed">0</span></p>
-        </div>
-        <div class="plan-actions" id="planActions">
-          <div class="upgrade-msg">
-            <i class="fas fa-lock"></i> You need an active subscription to list properties.
-          </div>
-          <button class="btn-upgrade" id="upgradeBtn">
-            <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
-          </button>
-        </div>
+      <div class="sub-header-right">
+        <span class="plan-status" id="planStatus">Inactive</span>
       </div>
     </div>
 
-    <!-- Upgrade Modal -->
-    <div id="upgradeModal" class="modal" style="display:none;">
-      <div class="modal-content" style="max-width:680px; background:#1a1a1a; padding:30px; border-radius:12px; margin:0 auto;">
-        <div id="planList"></div>
+    <!-- Card Body -->
+    <div class="sub-body">
+      
+      <!-- Left: Plan details grid -->
+      <div class="plan-details-grid">
+        <div class="plan-detail-item">
+          <span class="detail-icon"><i class="fas fa-tag"></i></span>
+          <span class="detail-label">Plan</span>
+          <span class="detail-value" id="currentPlan">No Active Plan</span>
+        </div>
+        <div class="plan-detail-item">
+          <span class="detail-icon"><i class="fas fa-calendar-alt"></i></span>
+          <span class="detail-label">Expires</span>
+          <span class="detail-value" id="planExpiry">—</span>
+        </div>
+        <div class="plan-detail-item">
+          <span class="detail-icon"><i class="fas fa-home"></i></span>
+          <span class="detail-label">Listings Used</span>
+          <span class="detail-value" id="listingsUsed">0 <span id="maxListingsDisplay">/ 0</span></span>
+        </div>
+        <div class="plan-detail-item">
+          <span class="detail-icon"><i class="fas fa-credit-card"></i></span>
+          <span class="detail-label">Price</span>
+          <span class="detail-value" id="planPrice">—</span>
+        </div>
       </div>
+
+      <!-- Progress bar (hidden if no plan) -->
+      <div class="sub-progress-wrapper" id="subProgressWrapper" style="display: none;">
+        <div class="sub-progress-header">
+          <span>Listings usage</span>
+          <span><span id="progressUsed">0</span> / <span id="progressTotal">0</span> used</span>
+        </div>
+        <div class="sub-progress">
+          <div class="sub-progress-bar" id="subProgressBar" style="width: 0%;"></div>
+        </div>
+        <div class="sub-progress-footer">
+          <span id="progressStatus">No active subscription</span>
+        </div>
+      </div>
+
     </div>
-  </section>
+
+    <!-- Card Actions (Upgrade / Renew) -->
+    <div class="sub-actions" id="planActions">
+      <div class="upgrade-msg" id="upgradeMsg">
+        <i class="fas fa-lock"></i> You need an active subscription to list properties.
+      </div>
+      <button class="btn-upgrade" id="upgradeBtn">
+        <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
+      </button>
+    </div>
+
+  </div>
+</section>
+
+<!-- Upgrade Modal -->
+<div id="upgradeModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width:680px; background:#1a1a1a; padding:30px; border-radius:12px; margin:0 auto;">
+    <div id="planList"></div>
+  </div>
+</div>
 
   <!-- ===== FORM STATUS ===== -->
   <div id="formStatus" style="display:none;" class="existing-images-notice"></div>

@@ -10,6 +10,7 @@
 // - Dynamic price labels for Sale/Rent/Airbnb
 // - Subscription management (plans, upgrade, STK push)
 // - Auto-retry property creation after subscription
+// - AVAILABLE_FOR & RENTAL_TYPE auto‑computed from listing type
 // =============================================
 
 // =========================
@@ -21,7 +22,7 @@ let existingPublicIds = [];
 let allProperties = [];
 let features = [];
 let selectedImages = [];
-let pendingFormData = null;           // 🆕 Store form data for retry
+let pendingFormData = null; // Store form data for retry
 
 // =========================
 // API Configuration
@@ -151,7 +152,6 @@ function updatePriceField() {
     const priceInput = document.getElementById('price');
     const priceHint = document.getElementById('priceHint');
 
-    // Airbnb takes priority
     if (isAirbnb || propertyType === 'airbnb') {
         priceLabel.innerHTML = 'Nightly Rate (KES) *';
         priceInput.placeholder = 'e.g., 5000 (per night)';
@@ -279,7 +279,6 @@ const ImageManager = {
                 existingImages.splice(index, 1);
                 existingPublicIds.splice(index, 1);
                 this.displayExistingImages(existingImages, existingPublicIds);
-                // update form status (optional)
             });
             existingPreview.appendChild(div);
         });
@@ -404,10 +403,8 @@ const FormManager = {
         submitBtn.disabled = false;
         formStatus.style.display = 'none';
         document.getElementById('propertyId').value = '';
-        // Reset property type dropdown
         const typeSelect = document.getElementById('propertyType');
         if (typeSelect) typeSelect.value = '';
-        // Reset price field to default
         updatePriceField();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
@@ -429,31 +426,25 @@ const FormManager = {
         document.getElementById('parking').value = property.parking || 0;
         document.getElementById('status').value = property.status || 'available';
 
-        // Set listing type and Airbnb flag
         const listingType = property.listingType || 'sale';
         const isAirbnb = property.isAirbnb || false;
         document.getElementById('listingType').value = listingType;
         document.getElementById('isAirbnb').value = isAirbnb ? 'true' : 'false';
 
-        // Update transaction buttons
         document.querySelectorAll('.transaction-btn').forEach(btn => {
             btn.classList.remove('active');
             if (btn.dataset.transaction === listingType) btn.classList.add('active');
         });
-        // Special case: if Airbnb, highlight the Airbnb button
         if (isAirbnb) {
             document.getElementById('airbnbBtn')?.classList.add('active');
         }
 
-        // Amenities
         features = [...(property.amenities || [])];
         document.getElementById('features').value = JSON.stringify(features);
         FeaturesManager.displayFeatures();
 
-        // Images
         ImageManager.displayExistingImages(property.images || []);
 
-        // Update price label/hint
         updatePriceField();
 
         formTitle.textContent = `Edit Property: ${property.title}`;
@@ -478,17 +469,12 @@ const FormManager = {
 // =========================
 const PropertyAPI = {
     async fetchMyProperties() {
-        // ── Check if user is admin ──────────────────────────────────
         let isAdmin = false;
         try {
             const user = JSON.parse(localStorage.getItem('rentspace_user') || '{}');
             isAdmin = user.role === 'admin';
-        } catch (e) {
-            // If user data isn't available, treat as regular user
-        }
+        } catch (e) {}
 
-        // ── Admin: fetch all properties (limit 100) ──────────────
-        //    Regular user: fetch default page (20)
         const limit = isAdmin ? 100 : 20;
         const url = `${API_BASE}/api/properties/my-properties?limit=${limit}`;
 
@@ -498,14 +484,12 @@ const PropertyAPI = {
             throw new Error(err || 'Failed to fetch properties');
         }
         const data = await res.json();
-        console.log('📥 API response:', data); // For debugging
-
-        // ── Ensure we return an array ──────────────────────────────
+        console.log('📥 API response:', data);
         if (Array.isArray(data)) return data;
         if (data.properties && Array.isArray(data.properties)) return data.properties;
         if (data.success && Array.isArray(data.data)) return data.data;
         if (data.error) throw new Error(data.error);
-        return []; // fallback
+        return [];
     },
 
     async getPropertyById(id) {
@@ -521,7 +505,6 @@ const PropertyAPI = {
             body: formData
         });
         if (!res.ok) {
-            // Try to parse JSON error
             let errMsg;
             try {
                 const errData = await res.json();
@@ -598,7 +581,6 @@ const PropertiesTable = {
         pageProperties.forEach(property => {
             const tr = document.createElement('tr');
             const thumbSrc = property.images && property.images[0] ? property.images[0] : 'https://via.placeholder.com/44x34?text=No+Img';
-            // Determine listing display
             let listingDisplay = (property.listingType || '').toUpperCase();
             if (property.isAirbnb) listingDisplay = 'AIRBNB';
             tr.innerHTML = `
@@ -672,7 +654,6 @@ const PropertiesTable = {
     },
 
     attachEventListeners() {
-        // Edit buttons
         propertiesTable.querySelectorAll('.edit-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const id = btn.dataset.id;
@@ -685,7 +666,6 @@ const PropertiesTable = {
             });
         });
 
-        // Delete buttons
         propertiesTable.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const id = btn.dataset.id;
@@ -701,7 +681,6 @@ const PropertiesTable = {
             });
         });
 
-        // Thumbnail click -> open modal
         propertiesTable.querySelectorAll('.thumbnail-clickable').forEach(thumb => {
             thumb.addEventListener('click', () => {
                 const id = thumb.dataset.propertyId;
@@ -800,7 +779,6 @@ async function refreshUserData() {
             const data = await res.json();
             const user = data.user || data;
             localStorage.setItem('rentspace_user', JSON.stringify(user));
-            // Update subscription UI
             await loadSubscriptionData();
         }
     } catch (error) {
@@ -824,7 +802,6 @@ async function retryPendingProperty() {
     } catch (error) {
         console.error('Retry failed:', error);
         Utils.showToast('Please try creating your property again manually.', 'error');
-        // Don't clear pendingFormData – user might want to retry later
     }
 }
 
@@ -832,7 +809,6 @@ async function retryPendingProperty() {
 // Subscription Functions
 // =========================
 
-// Load subscription data and update the UI card
 async function loadSubscriptionData() {
     try {
         const user = JSON.parse(localStorage.getItem('rentspace_user'));
@@ -843,49 +819,115 @@ async function loadSubscriptionData() {
         const isPaid = ['basic', 'pro', 'developer'].includes(plan);
         const isExpired = expiry && expiry < new Date();
 
-        // ─── Get listing count ──────────────────────────────────
+        // ── Get listing count ──────────────────────────────────────
         let listingsUsed = 0;
         try {
             const properties = await PropertyAPI.fetchMyProperties();
             listingsUsed = properties.length;
-        } catch (e) {
-            // If user can't fetch properties, just show 0
+        } catch (e) {}
+
+        // ── Define plan limits ────────────────────────────────────
+        const planLimits = {
+            free: 0,
+            basic: 20,
+            pro: 9999,     // Unlimited
+            developer: 9999
+        };
+        const maxListings = planLimits[plan] || 0;
+        const isUnlimited = maxListings === 9999;
+        const percentage = isUnlimited ? 50 : (maxListings > 0 ? Math.min((listingsUsed / maxListings) * 100, 100) : 0);
+
+        // ── Plan details ──────────────────────────────────────────
+        const planDisplayName = plan.charAt(0).toUpperCase() + plan.slice(1);
+        const isActive = isPaid && !isExpired;
+
+        // Update legacy elements (still used)
+        document.getElementById('currentPlan').textContent = isActive ? planDisplayName : 'No Active Subscription';
+        document.getElementById('planBadge').textContent = isActive ? planDisplayName : 'Inactive';
+        document.getElementById('planBadge').className = isActive ? 'plan-badge active' : 'plan-badge inactive';
+        document.getElementById('planStatus').textContent = isActive ? 'Active' : 'Inactive';
+        document.getElementById('planStatus').style.color = isActive ? '#4CAF50' : '#ff6b6b';
+        document.getElementById('planExpiry').textContent = isActive && expiry ? expiry.toLocaleDateString() : '—';
+        document.getElementById('listingsUsed').textContent = isActive ? listingsUsed : '—';
+
+        // ── Update new elements ──────────────────────────────────
+        // Price
+        const priceMap = {
+            basic: 'KES 2,500/mo',
+            pro: 'KES 5,000/mo',
+            developer: 'KES 10,000/mo',
+            free: '—'
+        };
+        document.getElementById('planPrice').textContent = isActive ? priceMap[plan] : '—';
+
+        // Max listings display (inside the "Used" detail item)
+        const maxListingsDisplay = document.getElementById('maxListingsDisplay');
+        if (maxListingsDisplay) {
+            if (isActive) {
+                maxListingsDisplay.textContent = isUnlimited ? '♾️' : `/ ${maxListings}`;
+            } else {
+                maxListingsDisplay.textContent = '';
+            }
         }
 
-        // ─── Update UI ──────────────────────────────────────────
-        if (isPaid && !isExpired) {
-            // Paid user – show active plan
-            document.getElementById('currentPlan').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
-            document.getElementById('planBadge').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
-            document.getElementById('planBadge').className = 'plan-badge active';
-            document.getElementById('planStatus').textContent = 'Active';
-            document.getElementById('planStatus').style.color = '#4CAF50';
-            document.getElementById('planExpiry').textContent = expiry ? expiry.toLocaleDateString() : '—';
-            document.getElementById('listingsUsed').textContent = listingsUsed;
-            document.getElementById('planActions').innerHTML = '';
-        } else {
-            // ─── No active subscription ──────────────────────────
-            document.getElementById('currentPlan').textContent = 'No Active Subscription';
-            document.getElementById('planBadge').textContent = 'Inactive';
-            document.getElementById('planBadge').className = 'plan-badge inactive';
-            document.getElementById('planStatus').textContent = 'Inactive';
-            document.getElementById('planStatus').style.color = '#ff6b6b';
-            document.getElementById('planExpiry').textContent = '—';
-            document.getElementById('listingsUsed').textContent = '—';
+        // ── Progress bar ──────────────────────────────────────────
+        const progressWrapper = document.getElementById('subProgressWrapper');
+        const progressBar = document.getElementById('subProgressBar');
+        const progressUsed = document.getElementById('progressUsed');
+        const progressTotal = document.getElementById('progressTotal');
+        const progressStatus = document.getElementById('progressStatus');
 
-            // ─── Show upgrade CTA ────────────────────────────────
-            document.getElementById('planActions').innerHTML = `
-                <div style="background:#2a1a1a; border-left:4px solid #c5a059; padding:12px 16px; border-radius:6px; margin-bottom:10px;">
-                    <p style="margin:0; color:#eaeaea;">
-                        <i class="fas fa-lock" style="color:#c5a059;"></i>
-                        You need an active subscription to list properties.
-                    </p>
+        if (isActive) {
+            progressWrapper.style.display = 'block';
+            progressUsed.textContent = listingsUsed;
+            progressTotal.textContent = isUnlimited ? '♾️' : maxListings;
+            progressBar.style.width = isUnlimited ? '50%' : percentage + '%';
+
+            // Add warning/danger classes
+            progressBar.classList.remove('warning', 'danger');
+            if (!isUnlimited && percentage > 90) progressBar.classList.add('danger');
+            else if (!isUnlimited && percentage > 70) progressBar.classList.add('warning');
+
+            // Status text
+            if (isUnlimited) {
+                progressStatus.textContent = '♾️ Unlimited listings on this plan';
+            } else if (percentage > 90) {
+                progressStatus.textContent = '⚠️ You\'re near your listing limit!';
+            } else {
+                progressStatus.textContent = `${Math.round(100 - percentage)}% of your slots remaining`;
+            }
+        } else {
+            progressWrapper.style.display = 'none';
+        }
+
+        // ── Actions (upgrade / manage) ────────────────────────────
+        const actionsContainer = document.getElementById('planActions');
+        if (isActive) {
+            // Active plan – show management link
+            actionsContainer.innerHTML = `
+                <div style="text-align: right; font-size: 13px; color: var(--text-muted); padding: 8px 0;">
+                    <i class="fas fa-check-circle" style="color: #4CAF50;"></i> Your plan is active
+                    <a href="#" id="manageSubscriptionLink" style="color: var(--gold); margin-left: 12px; text-decoration: none;">
+                        Manage
+                    </a>
                 </div>
-                <button class="btn btn-primary" id="upgradeBtn" style="width:100%; padding:12px;">
+            `;
+            document.getElementById('manageSubscriptionLink')?.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Optional: open a modal or redirect to manage page
+                Utils.showToast('Manage subscription page coming soon.', 'info');
+            });
+        } else {
+            // Inactive – show upgrade message and button
+            actionsContainer.innerHTML = `
+                <div class="upgrade-msg">
+                    <i class="fas fa-lock"></i> You need an active subscription to list properties.
+                </div>
+                <button class="btn-upgrade" id="upgradeBtn">
                     <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
                 </button>
             `;
-            document.getElementById('upgradeBtn').addEventListener('click', openUpgradeModal);
+            document.getElementById('upgradeBtn')?.addEventListener('click', openUpgradeModal);
         }
 
     } catch (error) {
@@ -893,13 +935,154 @@ async function loadSubscriptionData() {
     }
 }
 
-// Open upgrade modal and fetch plans
+// =========================
+// Compute availability fields
+// =========================
+function computeAvailabilityFields() {
+    const listingType = document.getElementById('listingType')?.value || 'sale';
+    const isAirbnb = document.getElementById('isAirbnb')?.value === 'true';
+    const propertyType = document.getElementById('propertyType')?.value || '';
+
+    let availableFor = '';
+    let rentalType = '';
+
+    if (isAirbnb || propertyType === 'airbnb') {
+        // Airbnb: available for both short and long term (we set both)
+        availableFor = 'both';
+        rentalType = 'short_term';
+    } else if (listingType === 'rent') {
+        availableFor = 'long_term';
+        rentalType = 'long_term';
+    } else if (listingType === 'sale') {
+        // Land is also sale
+        availableFor = 'sale';
+        rentalType = 'sale';
+    } else {
+        // fallback
+        availableFor = 'long_term';
+        rentalType = 'long_term';
+    }
+
+    return { availableFor, rentalType };
+}
+
+// =========================
+// Form Submit Handler (UPDATED)
+// =========================
+async function handleFormSubmit(e) {
+    e.preventDefault();
+
+    // ── Validation ──────────────────────────────────────────────
+    const title = document.getElementById('title')?.value.trim();
+    const estate = document.getElementById('estate')?.value.trim();
+    const county = document.getElementById('county')?.value.trim();
+    const price = parseFloat(document.getElementById('price')?.value || 0);
+    const description = document.getElementById('description')?.value.trim();
+    const propertyType = document.getElementById('propertyType')?.value;
+
+    if (!title) { Utils.showToast('Title is required', 'error'); return; }
+    if (!estate) { Utils.showToast('Estate is required', 'error'); return; }
+    if (!county) { Utils.showToast('County is required', 'error'); return; }
+    if (!propertyType) { Utils.showToast('Property type is required', 'error'); return; }
+    if (isNaN(price) || price <= 0) { Utils.showToast('Valid price is required', 'error'); return; }
+    if (!description) { Utils.showToast('Description is required', 'error'); return; }
+
+    if (!currentEditId && ImageManager.getNewImages().length === 0) {
+        Utils.showToast('Please select at least one image', 'error');
+        return;
+    }
+
+    // ── Compute available_for and rental_type ──────────────────
+    const { availableFor, rentalType } = computeAvailabilityFields();
+
+    // ── Build FormData ──────────────────────────────────────────
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('listingType', document.getElementById('listingType')?.value || 'sale');
+    formData.append('isAirbnb', document.getElementById('isAirbnb')?.value === 'true');
+    formData.append('propertyType', propertyType);
+    formData.append('estate', estate);
+    formData.append('county', county);
+    formData.append('price', price);
+    formData.append('bedrooms', document.getElementById('bedrooms')?.value || 0);
+    formData.append('bathrooms', document.getElementById('bathrooms')?.value || 0);
+    formData.append('parking', document.getElementById('parking')?.value || 0);
+    formData.append('size', document.getElementById('size')?.value || '');
+    formData.append('status', document.getElementById('status')?.value || 'available');
+    formData.append('description', description);
+    formData.append('amenities', JSON.stringify(features));
+
+    // ★ NEW: Append computed availability fields
+    formData.append('available_for', availableFor);
+    formData.append('rental_type', rentalType);
+
+    // Append new images
+    ImageManager.getNewImages().forEach(file => formData.append('images', file));
+
+    if (currentEditId) {
+        formData.append('existingImages', JSON.stringify(existingImages));
+        formData.append('existingPublicIds', JSON.stringify(existingPublicIds));
+    }
+
+    // ── Disable submit button ──────────────────────────────────
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${currentEditId ? 'Updating...' : 'Creating...'}`;
+
+    try {
+        if (currentEditId) {
+            await PropertyAPI.updateProperty(currentEditId, formData);
+            Utils.showToast('Property updated successfully');
+            FormManager.reset();
+            await PropertiesTable.loadAndRender();
+        } else {
+            await PropertyAPI.createProperty(formData);
+            Utils.showToast('Property created successfully');
+            FormManager.reset();
+            await PropertiesTable.loadAndRender();
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        const errorMsg = error.message || '';
+        const isSubscriptionError =
+            errorMsg.toLowerCase().includes('subscription') ||
+            errorMsg.toLowerCase().includes('subscribe') ||
+            errorMsg.toLowerCase().includes('upgrade');
+
+        if (isSubscriptionError) {
+            pendingFormData = formData;
+            Utils.showToast('📢 You need a subscription to list properties. Upgrade now!', 'warning');
+            setTimeout(() => {
+                openUpgradeModal();
+                const subCard = document.getElementById('subscriptionCard');
+                if (subCard) {
+                    subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    subCard.style.borderColor = '#c5a059';
+                    subCard.style.boxShadow = '0 0 20px rgba(197, 160, 89, 0.3)';
+                    setTimeout(() => {
+                        subCard.style.borderColor = '#2c2c2c';
+                        subCard.style.boxShadow = 'none';
+                    }, 3000);
+                }
+            }, 500);
+        } else {
+            Utils.showToast(errorMsg || 'Failed to save property', 'error');
+        }
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = currentEditId
+            ? '<i class="fas fa-save"></i> Update Property'
+            : '<i class="fas fa-save"></i> Create Property';
+    }
+}
+
+// =========================
+// Upgrade Modal (UPDATED)
+// =========================
 async function openUpgradeModal() {
     const modal = document.getElementById('upgradeModal');
     const planList = document.getElementById('planList');
     modal.style.display = 'flex';
 
-    // ── Get current property data for the summary ──────────────
     const title = document.getElementById('title')?.value?.trim() || '';
     const estate = document.getElementById('estate')?.value?.trim() || '';
     const county = document.getElementById('county')?.value?.trim() || '';
@@ -908,7 +1091,6 @@ async function openUpgradeModal() {
     const hasPending = pendingFormData !== null;
     const isEdit = currentEditId !== null;
 
-    // ── Build property summary ──────────────────────────────────
     let summaryHTML = '';
     if (hasPending || title || estate || price) {
         const location = estate && county ? `${estate}, ${county}` : estate || county || '—';
@@ -932,7 +1114,6 @@ async function openUpgradeModal() {
         `;
     }
 
-    // ── Pre-fill phone number ──────────────────────────────────
     const user = JSON.parse(localStorage.getItem('rentspace_user') || '{}');
     let userPhone = '';
     if (user.phone) {
@@ -942,8 +1123,6 @@ async function openUpgradeModal() {
         }
     }
 
-    // ── Define packages ──────────────────────────────────────────
-    // These map to your backend plans: basic, pro, developer
     const PACKAGES = {
         monthly: [
             {
@@ -982,7 +1161,7 @@ async function openUpgradeModal() {
                 id: 'basic',
                 name: 'Basic',
                 icon: 'fa-star',
-                price: 700, // ~2500/4
+                price: 700,
                 period: 'week',
                 features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
                 popular: false,
@@ -992,7 +1171,7 @@ async function openUpgradeModal() {
                 id: 'pro',
                 name: 'Silver',
                 icon: 'fa-gem',
-                price: 1400, // ~5000/4
+                price: 1400,
                 period: 'week',
                 features: ['Unlimited listings', '📊 Advanced analytics', 'Priority support', 'WhatsApp leads', '⭐ Featured placement'],
                 popular: true,
@@ -1002,7 +1181,7 @@ async function openUpgradeModal() {
                 id: 'developer',
                 name: 'Gold',
                 icon: 'fa-crown',
-                price: 2800, // ~10000/4
+                price: 2800,
                 period: 'week',
                 features: ['Unlimited listings', '📊 Premium analytics', '24/7 priority support', 'WhatsApp leads', '⭐ Featured placement', '🔌 API access', '📦 Bulk upload'],
                 popular: false,
@@ -1013,7 +1192,6 @@ async function openUpgradeModal() {
 
     let currentPeriod = 'monthly';
 
-    // ── Render the plan cards ────────────────────────────────────
     function renderPlans(period) {
         const plans = PACKAGES[period] || PACKAGES.monthly;
         const periodLabel = period === 'monthly' ? 'per month' : 'per week';
@@ -1052,11 +1230,9 @@ async function openUpgradeModal() {
                 </div>
             </div>
         `;
-
         return html;
     }
 
-    // ─── Render the full modal content ────────────────────────────
     planList.innerHTML = `
         ${summaryHTML}
         ${renderPlans(currentPeriod)}
@@ -1070,13 +1246,11 @@ async function openUpgradeModal() {
         </div>
     `;
 
-    // ─── Re-bind events ──────────────────────────────────────────
-    // Period toggle
+    // ─── Period toggle ──────────────────────────────────────────
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const period = this.dataset.period;
             currentPeriod = period;
-            // Re-render with the selected period
             const currentSummary = planList.querySelector('.modal-property-summary')?.outerHTML || '';
             const phoneSection = planList.querySelector('.modal-phone-section')?.outerHTML || '';
             const actions = planList.querySelector('.modal-actions')?.outerHTML || '';
@@ -1087,103 +1261,52 @@ async function openUpgradeModal() {
                 ${actions}
             `;
             // Re-bind package clicks
-            bindPackageClicks();
+            document.querySelectorAll('.package-card').forEach(el => {
+                el.addEventListener('click', function() {
+                    document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    this.style.borderColor = '#c5a059';
+                    this.style.boxShadow = '0 0 30px rgba(197, 160, 89, 0.25)';
+                });
+            });
             // Re-bind period toggles
             document.querySelectorAll('.period-btn').forEach(b => {
                 b.addEventListener('click', arguments.callee);
             });
             // Re-bind subscribe button
             document.getElementById('subscribeBtn')?.addEventListener('click', handleSubscription);
-            // Re-bind close button
             document.getElementById('closeModalBtn')?.addEventListener('click', () => {
                 document.getElementById('upgradeModal').style.display = 'none';
             });
         });
     });
 
-    function bindPackageClicks() {
-        document.querySelectorAll('.package-card').forEach(el => {
-            el.addEventListener('click', function() {
-                document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
-                this.classList.add('selected');
-                this.dataset.selected = 'true';
-                // Highlight the selected card with a glow
-                this.style.borderColor = '#c5a059';
-                this.style.boxShadow = '0 0 30px rgba(197, 160, 89, 0.25)';
-            });
+    // ─── Package selection ──────────────────────────────────────
+    document.querySelectorAll('.package-card').forEach(el => {
+        el.addEventListener('click', function() {
+            document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
+            this.classList.add('selected');
+            this.style.borderColor = '#c5a059';
+            this.style.boxShadow = '0 0 30px rgba(197, 160, 89, 0.25)';
         });
-    }
+    });
 
-    bindPackageClicks();
-
-    // ─── Re-bind subscribe button ──────────────────────────────
+    // ─── Subscribe handler ──────────────────────────────────────
     document.getElementById('subscribeBtn')?.addEventListener('click', handleSubscription);
-
-    // ─── Re-bind close button ──────────────────────────────────
     document.getElementById('closeModalBtn')?.addEventListener('click', () => {
         document.getElementById('upgradeModal').style.display = 'none';
     });
-
-    // ─── Update subscribe handler to read selected package ────
-    // Override handleSubscription to use the new package selection
-    const originalHandleSubscription = handleSubscription;
-    handleSubscription = async function() {
-        const selected = document.querySelector('.package-card.selected');
-        if (!selected) {
-            Utils.showToast('Please select a plan.', 'error');
-            return;
-        }
-        const plan = selected.dataset.plan;
-        const period = selected.dataset.period || 'monthly';
-        const phone = document.getElementById('subscribePhone').value.trim();
-        if (!phone || !/^254\d{9}$/.test(phone)) {
-            Utils.showToast('Please enter a valid phone number (2547XXXXXXXX).', 'error');
-            return;
-        }
-
-        const btn = document.getElementById('subscribeBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-
-        try {
-            const token = getToken();
-            const res = await fetch(`${API_BASE}/api/subscriptions/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ plan, phoneNumber: phone })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Subscription failed');
-
-            Utils.showToast('STK push sent. Check your phone.', 'success');
-            document.getElementById('upgradeModal').style.display = 'none';
-
-            await refreshUserData();
-            setTimeout(async () => {
-                await retryPendingProperty();
-            }, 2000);
-
-        } catch (error) {
-            Utils.showToast(error.message, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = 'Subscribe Now';
-        }
-    };
-
-    // ─── Override the global handleSubscription ────────────────
-    // This ensures the subscribe button uses the updated handler
-    document.getElementById('subscribeBtn')?.addEventListener('click', handleSubscription);
 }
 
-// Handle subscription submission
+// ─── Global subscription handler ──────────────────────────────
 async function handleSubscription() {
-    const selected = document.querySelector('.plan-option[data-selected="true"]');
+    const selected = document.querySelector('.package-card.selected');
     if (!selected) {
         Utils.showToast('Please select a plan.', 'error');
         return;
     }
     const plan = selected.dataset.plan;
+    const period = selected.dataset.period || 'monthly';
     const phone = document.getElementById('subscribePhone').value.trim();
     if (!phone || !/^254\d{9}$/.test(phone)) {
         Utils.showToast('Please enter a valid phone number (2547XXXXXXXX).', 'error');
@@ -1207,10 +1330,7 @@ async function handleSubscription() {
         Utils.showToast('STK push sent. Check your phone.', 'success');
         document.getElementById('upgradeModal').style.display = 'none';
 
-        // ── Refresh user data and retry pending property ──────
-        await refreshUserData(); // updates localStorage and subscription UI
-
-        // Wait a moment for the backend to fully process (optional)
+        await refreshUserData();
         setTimeout(async () => {
             await retryPendingProperty();
         }, 2000);
@@ -1219,125 +1339,7 @@ async function handleSubscription() {
         Utils.showToast(error.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = 'Subscribe';
-    }
-}
-
-// =========================
-// Form Submit Handler
-// =========================
-async function handleFormSubmit(e) {
-    e.preventDefault();
-
-    // ── Validation ──────────────────────────────────────────────
-    const title = document.getElementById('title')?.value.trim();
-    const estate = document.getElementById('estate')?.value.trim();
-    const county = document.getElementById('county')?.value.trim();
-    const price = parseFloat(document.getElementById('price')?.value || 0);
-    const description = document.getElementById('description')?.value.trim();
-    const propertyType = document.getElementById('propertyType')?.value;
-
-    if (!title) { Utils.showToast('Title is required', 'error'); return; }
-    if (!estate) { Utils.showToast('Estate is required', 'error'); return; }
-    if (!county) { Utils.showToast('County is required', 'error'); return; }
-    if (!propertyType) { Utils.showToast('Property type is required', 'error'); return; }
-    if (isNaN(price) || price <= 0) { Utils.showToast('Valid price is required', 'error'); return; }
-    if (!description) { Utils.showToast('Description is required', 'error'); return; }
-
-    // If creating new, require at least one image
-    if (!currentEditId && ImageManager.getNewImages().length === 0) {
-        Utils.showToast('Please select at least one image', 'error');
-        return;
-    }
-
-    // ── Build FormData ──────────────────────────────────────────
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('listingType', document.getElementById('listingType')?.value || 'sale');
-    formData.append('isAirbnb', document.getElementById('isAirbnb')?.value === 'true');
-    formData.append('propertyType', propertyType);
-    formData.append('estate', estate);
-    formData.append('county', county);
-    formData.append('price', price);
-    formData.append('bedrooms', document.getElementById('bedrooms')?.value || 0);
-    formData.append('bathrooms', document.getElementById('bathrooms')?.value || 0);
-    formData.append('parking', document.getElementById('parking')?.value || 0);
-    formData.append('size', document.getElementById('size')?.value || '');
-    formData.append('status', document.getElementById('status')?.value || 'available');
-    formData.append('description', description);
-    formData.append('amenities', JSON.stringify(features));
-
-    // Append new images
-    ImageManager.getNewImages().forEach(file => formData.append('images', file));
-
-    // For edit, send existing image URLs and public IDs (if any)
-    if (currentEditId) {
-        formData.append('existingImages', JSON.stringify(existingImages));
-        formData.append('existingPublicIds', JSON.stringify(existingPublicIds));
-    }
-
-    // ── Disable submit button ──────────────────────────────────
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${currentEditId ? 'Updating...' : 'Creating...'}`;
-
-    try {
-        if (currentEditId) {
-            await PropertyAPI.updateProperty(currentEditId, formData);
-            Utils.showToast('Property updated successfully');
-            FormManager.reset();
-            await PropertiesTable.loadAndRender();
-        } else {
-            await PropertyAPI.createProperty(formData);
-            Utils.showToast('Property created successfully');
-            FormManager.reset();
-            await PropertiesTable.loadAndRender();
-        }
-    } catch (error) {
-        console.error('Save error:', error);
-
-        // ─── 🚨 Check if it's a subscription error (403) ──────
-        const errorMsg = error.message || '';
-        const isSubscriptionError =
-            errorMsg.toLowerCase().includes('subscription') ||
-            errorMsg.toLowerCase().includes('subscribe') ||
-            errorMsg.toLowerCase().includes('upgrade');
-
-        if (isSubscriptionError) {
-            // ── Store pending data ──────────────────────────────
-            pendingFormData = formData;
-
-            // ── Show a friendly upgrade prompt ──────────────────
-            Utils.showToast('📢 You need a subscription to list properties. Upgrade now!', 'warning');
-
-            // ── Open the upgrade modal ──────────────────────────
-            setTimeout(() => {
-                openUpgradeModal();
-
-                // Scroll to subscription section
-                const subCard = document.getElementById('subscriptionCard');
-                if (subCard) {
-                    subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-
-                // Highlight the subscription card
-                if (subCard) {
-                    subCard.style.borderColor = '#c5a059';
-                    subCard.style.boxShadow = '0 0 20px rgba(197, 160, 89, 0.3)';
-                    setTimeout(() => {
-                        subCard.style.borderColor = '#2c2c2c';
-                        subCard.style.boxShadow = 'none';
-                    }, 3000);
-                }
-            }, 500);
-        } else {
-            // ── Generic error ────────────────────────────────────
-            Utils.showToast(errorMsg || 'Failed to save property', 'error');
-        }
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = currentEditId
-            ? '<i class="fas fa-save"></i> Update Property'
-            : '<i class="fas fa-save"></i> Create Property';
+        btn.innerHTML = 'Subscribe Now';
     }
 }
 
@@ -1345,36 +1347,30 @@ async function handleFormSubmit(e) {
 // Initialization
 // =========================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Check authentication
     if (!getToken()) {
         redirectToLogin();
         return;
     }
 
-    // Initialize modules
     ImageManager.init();
     FeaturesManager.init();
     ImageModal.init();
 
-    // Set up transaction buttons (Sale, Rent, Airbnb)
     document.querySelectorAll('.transaction-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.transaction-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             const transaction = this.dataset.transaction;
             document.getElementById('listingType').value = transaction;
-            
-            // Handle Airbnb special case
+
             if (this.id === 'airbnbBtn') {
                 document.getElementById('isAirbnb').value = 'true';
-                // Auto-select property type to Airbnb
                 const typeSelect = document.getElementById('propertyType');
                 if (typeSelect) {
                     typeSelect.value = 'airbnb';
                 }
             } else {
                 document.getElementById('isAirbnb').value = 'false';
-                // If user clicks Sale or Rent, reset property type if it was Airbnb
                 const typeSelect = document.getElementById('propertyType');
                 if (typeSelect && typeSelect.value === 'airbnb') {
                     typeSelect.value = '';
@@ -1384,23 +1380,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Property Type change – update price and Airbnb flag
     document.getElementById('propertyType')?.addEventListener('change', function() {
         const val = this.value;
         if (val === 'airbnb') {
             document.getElementById('isAirbnb').value = 'true';
-            // Also highlight Airbnb button
             document.querySelectorAll('.transaction-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('airbnbBtn')?.classList.add('active');
             document.getElementById('listingType').value = 'rent';
         } else {
-            // If they switch away from Airbnb, reset flag (but keep listing type as is)
             document.getElementById('isAirbnb').value = 'false';
-            // If currently Airbnb button active, remove it
             const airbnbBtn = document.getElementById('airbnbBtn');
             if (airbnbBtn && airbnbBtn.classList.contains('active')) {
                 airbnbBtn.classList.remove('active');
-                // Activate appropriate button based on listingType
                 const currentListing = document.getElementById('listingType').value;
                 document.querySelectorAll('.transaction-btn').forEach(b => {
                     if (b.dataset.transaction === currentListing) b.classList.add('active');
@@ -1410,34 +1401,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         updatePriceField();
     });
 
-    // Form submit
     propertyForm?.addEventListener('submit', handleFormSubmit);
 
-    // Reset button
     resetBtn?.addEventListener('click', () => {
         if (currentEditId && !confirm('Discard changes?')) return;
         FormManager.reset();
     });
 
-    // Logout
     logoutBtn?.addEventListener('click', () => {
         localStorage.removeItem('rentspace_token');
         window.location.href = 'login.html';
     });
 
-    // ─── Subscription Modal Events ──────────────────────────────
     const closeModalBtn = document.getElementById('closeModalBtn');
     if (closeModalBtn) {
         closeModalBtn.addEventListener('click', () => {
             document.getElementById('upgradeModal').style.display = 'none';
         });
     }
-    const subscribeBtn = document.getElementById('subscribeBtn');
-    if (subscribeBtn) {
-        subscribeBtn.addEventListener('click', handleSubscription);
-    }
 
-    // Load properties and subscription data
     await PropertiesTable.loadAndRender();
     await loadSubscriptionData();
 });
