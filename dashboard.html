@@ -1081,315 +1081,538 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Form Validation ─── */
+.form-control.is-valid {
+  border-color: #28a745;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.form-control.is-invalid {
+  border-color: #dc3545;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.invalid-feedback {
+  display: none;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #dc3545;
+}
+
+.form-control.is-invalid ~ .invalid-feedback {
+  display: block;
+}
+
+.form-control.is-valid ~ .invalid-feedback {
+  display: none;
+}
+/* ─── Form Loading State ─── */
+.form-loading {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.form-loading .btn {
+  cursor: not-allowed;
+}
+
+/* Optional: subtle pulse animation while loading */
+.form-loading .btn-primary {
+  animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes loadingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+/* ===== FILTER BAR ===== */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--dark-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  flex: 1;
+  max-width: 200px;
+}
+
+.filter-group label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.filter-select {
+  padding: 10px 14px;
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-white);
+  font-family: 'Jost', sans-serif;
+  font-size: 14px;
+  transition: var(--transition);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+.filter-select:focus {
+  border-color: var(--gold);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.1);
+}
+
+.filter-select option {
+  background: #1a1a1a;
+  color: var(--text-white);
+}
+
+#clearFiltersBtn {
+  padding: 10px 20px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: 'Jost', sans-serif;
+  white-space: nowrap;
+}
+
+#clearFiltersBtn:hover {
+  border-color: var(--gold);
+  color: var(--white);
+}
+
+.filter-result-count {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-left: auto;
+  padding: 10px 0;
+  white-space: nowrap;
+}
+
+.filter-result-count span {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+  }
+  
+  .filter-group {
+    min-width: 100%;
+    max-width: 100%;
+  }
+  
+  .filter-result-count {
+    margin-left: 0;
+    text-align: center;
+  }
+  
+  #clearFiltersBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
   </style>
 </head>
 <body>
 
-<!-- ===== HEADER ===== -->
-<header class="admin-header">
-  <div class="container">
-    <div class="logo-area">
-      <a href="index.html" class="nav-logo">Rent<span>Space</span><sup class="r-sup">®</sup></a>
-      <h1> <span class="badge">Dashboard</span></h1>
-    </div>
-    <div class="header-stats">
-      <span><i class="fas fa-home"></i> <span class="count" id="propertyCountDisplay">0</span> properties</span>
-      <button class="btn-logout" id="logoutBtn">
-        <i class="fas fa-sign-out-alt"></i> Logout
-      </button>
-    </div>
-  </div>
-</header>
-
-<!-- ===== MAIN ===== -->
-<main class="admin-container">
-
-  <!-- ===== SUBSCRIPTION SECTION ===== -->
-  <!-- ===== SUBSCRIPTION SECTION ===== -->
-<section class="subscription-section">
-  <div class="subscription-card" id="subscriptionCard">
-    
-    <!-- Card Header -->
-    <div class="sub-header">
-      <div class="sub-header-left">
-        <h3><i class="fas fa-crown"></i> Your Plan</h3>
-        <span class="plan-badge" id="planBadge">Free</span>
+  <!-- ===== HEADER ===== -->
+  <header class="admin-header">
+    <div class="container">
+      <div class="logo-area">
+        <a href="index.html" class="nav-logo">Rent<span>Space</span><sup class="r-sup">®</sup></a>
+        <h1> <span class="badge">Dashboard</span></h1>
       </div>
-      <div class="sub-header-right">
-        <span class="plan-status" id="planStatus">Inactive</span>
+      <div class="header-stats">
+        <span><i class="fas fa-home"></i> <span class="count" id="propertyCountDisplay">0</span> properties</span>
+        <button class="btn-logout" id="logoutBtn">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
       </div>
     </div>
+  </header>
 
-    <!-- Card Body -->
-    <div class="sub-body">
-      
-      <!-- Left: Plan details grid -->
-      <div class="plan-details-grid">
-        <div class="plan-detail-item">
-          <span class="detail-icon"><i class="fas fa-tag"></i></span>
-          <span class="detail-label">Plan</span>
-          <span class="detail-value" id="currentPlan">No Active Plan</span>
+  <!-- ===== MAIN ===== -->
+  <main class="admin-container">
+
+    <!-- ===== SUBSCRIPTION SECTION ===== -->
+    <section class="subscription-section">
+      <div class="subscription-card" id="subscriptionCard">
+
+        <!-- Card Header -->
+        <div class="sub-header">
+          <div class="sub-header-left">
+            <h3><i class="fas fa-crown"></i> Your Plan</h3>
+            <span class="plan-badge" id="planBadge">Free</span>
+          </div>
+          <div class="sub-header-right">
+            <span class="plan-status" id="planStatus">Inactive</span>
+          </div>
         </div>
-        <div class="plan-detail-item">
-          <span class="detail-icon"><i class="fas fa-calendar-alt"></i></span>
-          <span class="detail-label">Expires</span>
-          <span class="detail-value" id="planExpiry">—</span>
+
+        <!-- Card Body -->
+        <div class="sub-body">
+
+          <!-- Plan details grid -->
+          <div class="plan-details-grid">
+            <div class="plan-detail-item">
+              <span class="detail-icon"><i class="fas fa-tag"></i></span>
+              <span class="detail-label">Plan</span>
+              <span class="detail-value" id="currentPlan">No Active Plan</span>
+            </div>
+            <div class="plan-detail-item">
+              <span class="detail-icon"><i class="fas fa-calendar-alt"></i></span>
+              <span class="detail-label">Expires</span>
+              <span class="detail-value" id="planExpiry">—</span>
+            </div>
+            <div class="plan-detail-item">
+              <span class="detail-icon"><i class="fas fa-home"></i></span>
+              <span class="detail-label">Listings Used</span>
+              <span class="detail-value" id="listingsUsed">0 <span id="maxListingsDisplay">/ 0</span></span>
+            </div>
+            <div class="plan-detail-item">
+              <span class="detail-icon"><i class="fas fa-credit-card"></i></span>
+              <span class="detail-label">Price</span>
+              <span class="detail-value" id="planPrice">—</span>
+            </div>
+          </div>
+
+          <!-- Progress bar (hidden if no plan) -->
+          <div class="sub-progress-wrapper" id="subProgressWrapper" style="display: none;">
+            <div class="sub-progress-header">
+              <span>Listings usage</span>
+              <span><span id="progressUsed">0</span> / <span id="progressTotal">0</span> used</span>
+            </div>
+            <div class="sub-progress">
+              <div class="sub-progress-bar" id="subProgressBar" style="width: 0%;"></div>
+            </div>
+            <div class="sub-progress-footer">
+              <span id="progressStatus">No active subscription</span>
+            </div>
+          </div>
+
         </div>
-        <div class="plan-detail-item">
-          <span class="detail-icon"><i class="fas fa-home"></i></span>
-          <span class="detail-label">Listings Used</span>
-          <span class="detail-value" id="listingsUsed">0 <span id="maxListingsDisplay">/ 0</span></span>
-        </div>
-        <div class="plan-detail-item">
-          <span class="detail-icon"><i class="fas fa-credit-card"></i></span>
-          <span class="detail-label">Price</span>
-          <span class="detail-value" id="planPrice">—</span>
-        </div>
-      </div>
 
-      <!-- Progress bar (hidden if no plan) -->
-      <div class="sub-progress-wrapper" id="subProgressWrapper" style="display: none;">
-        <div class="sub-progress-header">
-          <span>Listings usage</span>
-          <span><span id="progressUsed">0</span> / <span id="progressTotal">0</span> used</span>
-        </div>
-        <div class="sub-progress">
-          <div class="sub-progress-bar" id="subProgressBar" style="width: 0%;"></div>
-        </div>
-        <div class="sub-progress-footer">
-          <span id="progressStatus">No active subscription</span>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Card Actions (Upgrade / Renew) -->
-    <div class="sub-actions" id="planActions">
-      <div class="upgrade-msg" id="upgradeMsg">
-        <i class="fas fa-lock"></i> You need an active subscription to list properties.
-      </div>
-      <button class="btn-upgrade" id="upgradeBtn">
-        <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
-      </button>
-    </div>
-
-  </div>
-</section>
-
-<!-- Upgrade Modal -->
-<div id="upgradeModal" class="modal" style="display:none;">
-  <div class="modal-content" style="max-width:680px; background:#1a1a1a; padding:30px; border-radius:12px; margin:0 auto;">
-    <div id="planList"></div>
-  </div>
-</div>
-
-  <!-- ===== FORM STATUS ===== -->
-  <div id="formStatus" style="display:none;" class="existing-images-notice"></div>
-
-  <!-- ===== ADD PROPERTY FORM ===== -->
-  <h2 id="formTitle"><i class="fas fa-plus-circle"></i> Add New Property</h2>
-
-  <form id="propertyForm">
-    <input type="hidden" id="propertyId">
-
-    <!-- Row 1: Title + Listing Type -->
-    <div class="form-row">
-      <div class="form-group">
-        <label for="title">Property Title <span class="required">*</span></label>
-        <input type="text" id="title" class="form-control" required placeholder="e.g., Modern 3-Bedroom Apartment">
-      </div>
-      <div class="form-group">
-        <label>Listing Type <span class="required">*</span></label>
-        <div class="transaction-group">
-          <button type="button" class="transaction-btn active" data-transaction="sale">For Sale</button>
-          <button type="button" class="transaction-btn" data-transaction="rent">For Rent</button>
-          <button type="button" class="transaction-btn" data-transaction="rent" id="airbnbBtn">
-            <i class="fab fa-airbnb"></i> Airbnb
+        <!-- Card Actions (Upgrade / Renew) -->
+        <div class="sub-actions" id="planActions">
+          <div class="upgrade-msg" id="upgradeMsg">
+            <i class="fas fa-lock"></i> You need an active subscription to list properties.
+          </div>
+          <button class="btn-upgrade" id="upgradeBtn">
+            <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
           </button>
         </div>
-        <input type="hidden" id="listingType" value="sale">
-        <input type="hidden" id="isAirbnb" value="false">
+
+      </div>
+    </section>
+
+    <!-- ===== UPGRADE MODAL ===== -->
+    <div id="upgradeModal" class="modal" style="display:none;">
+      <div class="modal-content" style="max-width:680px; background:#1a1a1a; padding:30px; border-radius:12px; margin:0 auto;">
+        <div id="planList"></div>
       </div>
     </div>
 
-    <!-- Row 2: Property Type + Bedrooms -->
-    <div class="form-row">
-      <div class="form-group">
-        <label for="propertyType">Property Type <span class="required">*</span></label>
-        <select id="propertyType" class="form-control" required>
-          <option value="">Select Property Type</option>
-          <option value="airbnb">Airbnb / Short Stay</option>
-          <optgroup label="Residential">
-            <option value="bungalow">Bungalow</option>
-            <option value="maisonette">Maisonette</option>
-            <option value="townhouse">Townhouse</option>
-            <option value="apartment">Apartment / Flat</option>
-            <option value="studio">Studio / Bedsitter</option>
-            <option value="villa">Villa</option>
-            <option value="furnished">Furnished</option>
-          </optgroup>
-          <optgroup label="Land">
-            <option value="land-res">Residential Plot</option>
-            <option value="land-comm">Commercial Land</option>
-            <option value="ranch">Agricultural / Ranch</option>
-          </optgroup>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="bedrooms">Bedrooms</label>
-        <input type="number" id="bedrooms" class="form-control" min="0" value="0" placeholder="e.g., 3">
-        <span class="helper">Set to 0 for land</span>
-      </div>
-    </div>
-
-    <!-- Row 3: Estate + County -->
-    <div class="form-row">
-      <div class="form-group">
-        <label for="estate">Estate / Area <span class="required">*</span></label>
-        <input type="text" id="estate" class="form-control" required placeholder="e.g., Kitengela, Syokimau">
-      </div>
-      <div class="form-group">
-        <label for="county">County <span class="required">*</span></label>
-        <input type="text" id="county" class="form-control" required placeholder="e.g., Kajiado, Nairobi">
-      </div>
-    </div>
-
-    <!-- Row 4: Price + Status -->
-    <div class="form-row">
-      <div class="form-group">
-        <label for="price" id="priceLabel">Price (KES) <span class="required">*</span></label>
-        <input type="number" id="price" class="form-control" required placeholder="e.g., 5000000" min="0">
-        <span class="helper" id="priceHint">For sale: total price. For rent: monthly rent.</span>
-      </div>
-      <div class="form-group">
-        <label for="status">Status</label>
-        <select id="status" class="form-control">
+    <!-- ===== FILTER BAR (MOVED HERE - OUTSIDE SUBSCRIPTION) ===== -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="filterStatus">Status</label>
+        <select id="filterStatus" class="filter-select">
+          <option value="all">All Statuses</option>
           <option value="available">Available</option>
           <option value="sold">Sold</option>
           <option value="reserved">Reserved</option>
-          <option value="pending">Pending Approval</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
         </select>
       </div>
+
+      <div class="filter-group">
+        <label for="filterType">Property Type</label>
+        <select id="filterType" class="filter-select">
+          <option value="all">All Types</option>
+          <option value="apartment">Apartment</option>
+          <option value="bungalow">Bungalow</option>
+          <option value="maisonette">Maisonette</option>
+          <option value="townhouse">Townhouse</option>
+          <option value="studio">Studio</option>
+          <option value="villa">Villa</option>
+          <option value="land-res">Residential Land</option>
+          <option value="land-comm">Commercial Land</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filterEstate">Estate / Area</label>
+        <select id="filterEstate" class="filter-select">
+          <option value="all">All Estates</option>
+          <option value="Kitengela">Kitengela</option>
+          <option value="Syokimau">Syokimau</option>
+          <option value="Karen">Karen</option>
+          <option value="Kilimani">Kilimani</option>
+          <option value="Hurlingham">Hurlingham</option>
+          <option value="Ngong">Ngong</option>
+          <option value="Westlands">Westlands</option>
+          <option value="Lavington">Lavington</option>
+        </select>
+      </div>
+
+      <button class="btn btn-secondary" id="clearFiltersBtn">
+        <i class="fas fa-times"></i> Clear Filters
+      </button>
+
+      <span class="filter-result-count" id="filterResultCount">Showing 0 properties</span>
     </div>
 
-    <!-- Row 5: Size + Bathrooms + Parking -->
-    <div class="form-row">
-      <div class="form-group">
-        <label for="size">Size / Plot Area</label>
-        <input type="text" id="size" class="form-control" placeholder="e.g., 1/8 acre, 1000 sqft">
-      </div>
-      <div class="form-group">
-        <label for="bathrooms">Bathrooms</label>
-        <input type="number" id="bathrooms" class="form-control" min="0" value="0" placeholder="e.g., 2">
-      </div>
-      <div class="form-group">
-        <label for="parking">Parking Spaces</label>
-        <input type="number" id="parking" class="form-control" min="0" value="0" placeholder="e.g., 2">
-      </div>
-    </div>
+    <!-- ===== FORM STATUS ===== -->
+    <div id="formStatus" style="display:none;" class="existing-images-notice"></div>
 
-    <!-- Description -->
-    <div class="form-group">
-      <label for="description">Description <span class="required">*</span></label>
-      <textarea id="description" class="form-control" rows="4" required placeholder="Describe the property features, amenities, location highlights..."></textarea>
-    </div>
+    <!-- ===== ADD PROPERTY FORM ===== -->
+    <h2 id="formTitle"><i class="fas fa-plus-circle"></i> Add New Property</h2>
 
-    <!-- Amenities -->
-    <div class="form-group">
-      <label>Amenities</label>
-      <div class="features-input">
-        <input type="text" id="featureInput" class="form-control" placeholder="e.g., Parking, WiFi, Pool, Security">
-        <button type="button" id="addFeature" class="btn btn-outline"><i class="fas fa-plus"></i> Add</button>
-      </div>
-      <div id="featuresList" class="features-list">
-        <span class="text-muted" style="color:#555; font-size:13px;">No amenities added yet</span>
-      </div>
-      <input type="hidden" id="features" value="[]">
-    </div>
+    <form id="propertyForm">
+      <input type="hidden" id="propertyId">
 
-    <!-- Images -->
-    <div class="form-group">
-      <label for="images">Property Images <span class="required">*</span></label>
-      <input type="file" id="images" class="form-control" multiple accept="image/*" required>
-      <span class="helper">Select at least one image. Max 10MB each. Recommended: 600x400px.</span>
-
-      <div style="margin-top: 15px;">
-        <label>New Images Preview</label>
-        <div id="imagePreview" class="image-preview-container">
-          <span class="text-muted" style="color:#555;">No images selected</span>
+      <!-- Row 1: Title + Listing Type -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="title">Property Title <span class="required">*</span></label>
+          <input type="text" id="title" class="form-control" required placeholder="e.g., Modern 3-Bedroom Apartment">
+          <div class="invalid-feedback">Please enter a property title</div>
         </div>
-        <button type="button" id="clearPreview" class="btn btn-secondary" style="margin-top:10px;">
-          <i class="fas fa-times"></i> Clear New Images
+        <div class="form-group">
+          <label>Listing Type <span class="required">*</span></label>
+          <div class="transaction-group">
+            <button type="button" class="transaction-btn active" data-transaction="sale">For Sale</button>
+            <button type="button" class="transaction-btn" data-transaction="rent">For Rent</button>
+            <button type="button" class="transaction-btn" data-transaction="rent" id="airbnbBtn">
+              <i class="fab fa-airbnb"></i> Airbnb
+            </button>
+          </div>
+          <div class="invalid-feedback" style="margin-top:8px;">Please select a listing type</div>
+          <input type="hidden" id="listingType" value="sale">
+          <input type="hidden" id="isAirbnb" value="false">
+        </div>
+      </div>
+
+      <!-- Row 2: Property Type + Bedrooms -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="propertyType">Property Type <span class="required">*</span></label>
+          <select id="propertyType" class="form-control" required>
+            <option value="">Select Property Type</option>
+            <option value="airbnb">Airbnb / Short Stay</option>
+            <optgroup label="Residential">
+              <option value="bungalow">Bungalow</option>
+              <option value="maisonette">Maisonette</option>
+              <option value="townhouse">Townhouse</option>
+              <option value="apartment">Apartment / Flat</option>
+              <option value="studio">Studio / Bedsitter</option>
+              <option value="villa">Villa</option>
+              <option value="furnished">Furnished</option>
+            </optgroup>
+            <optgroup label="Land">
+              <option value="land-res">Residential Plot</option>
+              <option value="land-comm">Commercial Land</option>
+              <option value="ranch">Agricultural / Ranch</option>
+            </optgroup>
+          </select>
+          <div class="invalid-feedback">Please select a property type</div>
+        </div>
+        <div class="form-group">
+          <label for="bedrooms">Bedrooms</label>
+          <input type="number" id="bedrooms" class="form-control" min="0" value="0" placeholder="e.g., 3">
+          <span class="helper">Set to 0 for land</span>
+        </div>
+      </div>
+
+      <!-- Row 3: Estate + County -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="estate">Estate / Area <span class="required">*</span></label>
+          <input type="text" id="estate" class="form-control" required placeholder="e.g., Kitengela, Syokimau">
+          <div class="invalid-feedback">Please enter the estate/area</div>
+        </div>
+        <div class="form-group">
+          <label for="county">County <span class="required">*</span></label>
+          <input type="text" id="county" class="form-control" required placeholder="e.g., Kajiado, Nairobi">
+          <div class="invalid-feedback">Please enter the county</div>
+        </div>
+      </div>
+
+      <!-- Row 4: Price + Status -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="price" id="priceLabel">Price (KES) <span class="required">*</span></label>
+          <input type="number" id="price" class="form-control" required placeholder="e.g., 5000000" min="0">
+          <span class="helper" id="priceHint">For sale: total price. For rent: monthly rent.</span>
+          <div class="invalid-feedback">Please enter a valid price</div>
+        </div>
+        <div class="form-group">
+          <label for="status">Status</label>
+          <select id="status" class="form-control">
+            <option value="available">Available</option>
+            <option value="sold">Sold</option>
+            <option value="reserved">Reserved</option>
+            <option value="pending">Pending Approval</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 5: Size + Bathrooms + Parking -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="size">Size / Plot Area</label>
+          <input type="text" id="size" class="form-control" placeholder="e.g., 1/8 acre, 1000 sqft">
+        </div>
+        <div class="form-group">
+          <label for="bathrooms">Bathrooms</label>
+          <input type="number" id="bathrooms" class="form-control" min="0" value="0" placeholder="e.g., 2">
+        </div>
+        <div class="form-group">
+          <label for="parking">Parking Spaces</label>
+          <input type="number" id="parking" class="form-control" min="0" value="0" placeholder="e.g., 2">
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label for="description">Description <span class="required">*</span></label>
+        <textarea id="description" class="form-control" rows="4" required placeholder="Describe the property features, amenities, location highlights..."></textarea>
+        <div class="invalid-feedback">Please enter a description</div>
+      </div>
+
+      <!-- Amenities -->
+      <div class="form-group">
+        <label>Amenities</label>
+        <div class="features-input">
+          <input type="text" id="featureInput" class="form-control" placeholder="e.g., Parking, WiFi, Pool, Security">
+          <button type="button" id="addFeature" class="btn btn-outline"><i class="fas fa-plus"></i> Add</button>
+        </div>
+        <div id="featuresList" class="features-list">
+          <span class="text-muted" style="color:#555; font-size:13px;">No amenities added yet</span>
+        </div>
+        <input type="hidden" id="features" value="[]">
+      </div>
+
+      <!-- Images -->
+      <div class="form-group">
+        <label for="images">Property Images <span class="required">*</span></label>
+        <input type="file" id="images" class="form-control" multiple accept="image/*" required>
+        <span class="helper">Select at least one image. Max 10MB each. Recommended: 600x400px.</span>
+
+        <div style="margin-top: 15px;">
+          <label>New Images Preview</label>
+          <div id="imagePreview" class="image-preview-container">
+            <span class="text-muted" style="color:#555;">No images selected</span>
+          </div>
+          <button type="button" id="clearPreview" class="btn btn-secondary" style="margin-top:10px;">
+            <i class="fas fa-times"></i> Clear New Images
+          </button>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <label>Existing Images</label>
+          <div id="existingImagesPreview" class="image-preview-container">
+            <span class="text-muted" style="color:#555;">No existing images</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="submit" id="submitBtn" class="btn btn-primary">
+          <i class="fas fa-save"></i> Create Property
+        </button>
+        <button type="button" id="resetForm" class="btn btn-outline">
+          <i class="fas fa-redo"></i> Reset Form
         </button>
       </div>
+    </form>
 
-      <div style="margin-top: 15px;">
-        <label>Existing Images</label>
-        <div id="existingImagesPreview" class="image-preview-container">
-          <span class="text-muted" style="color:#555;">No existing images</span>
-        </div>
+    <hr style="border-color:var(--border); margin:32px 0;">
+
+    <!-- ===== PROPERTY LIST TABLE ===== -->
+    <div class="table-section">
+      <h3><i class="fas fa-list" style="color:var(--gold);"></i> My Properties</h3>
+      <div class="table-wrapper">
+        <table id="propertiesTable">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Images</th>
+              <th>Estate</th>
+              <th>Type</th>
+              <th>Listing</th>
+              <th>Price</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="8" style="text-align:center; padding:40px;">
+              <i class="fas fa-spinner fa-spin"></i> Loading...
+            </td></tr>
+          </tbody>
+        </table>
       </div>
+      <div id="paginationControls" style="display:flex; justify-content:center; gap:8px; margin-top:20px; flex-wrap:wrap;"></div>
     </div>
 
-    <!-- Form Actions -->
-    <div class="form-actions">
-      <button type="submit" id="submitBtn" class="btn btn-primary">
-        <i class="fas fa-save"></i> Create Property
-      </button>
-      <button type="button" id="resetForm" class="btn btn-outline">
-        <i class="fas fa-redo"></i> Reset Form
-      </button>
-    </div>
-  </form>
+  </main>
 
-  <hr style="border-color:var(--border); margin:32px 0;">
-
-  <!-- ===== PROPERTY LIST TABLE ===== -->
-  <div class="table-section">
-    <h3><i class="fas fa-list" style="color:var(--gold);"></i> My Properties</h3>
-    <div class="table-wrapper">
-      <table id="propertiesTable">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Images</th>
-            <th>Estate</th>
-            <th>Type</th>
-            <th>Listing</th>
-            <th>Price</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td colspan="8" style="text-align:center; padding:40px;">
-            <i class="fas fa-spinner fa-spin"></i> Loading...
-          </td></tr>
-        </tbody>
-      </table>
+  <!-- ===== IMAGE MODAL ===== -->
+  <div id="imageModal" class="modal">
+    <div class="modal-content">
+      <span class="modal-close">&times;</span>
+      <div class="modal-body">
+        <img id="modalImage" src="" alt="Property image">
+      </div>
+      <div class="modal-caption">
+        <span id="modalCounter"></span>
+      </div>
+      <button class="modal-prev" id="modalPrev"><i class="fas fa-chevron-left"></i></button>
+      <button class="modal-next" id="modalNext"><i class="fas fa-chevron-right"></i></button>
     </div>
-    <div id="paginationControls" style="display:flex; justify-content:center; gap:8px; margin-top:20px; flex-wrap:wrap;"></div>
   </div>
 
-</main>
-
-<!-- ===== IMAGE MODAL ===== -->
-<div id="imageModal" class="modal">
-  <div class="modal-content">
-    <span class="modal-close">&times;</span>
-    <div class="modal-body">
-      <img id="modalImage" src="" alt="Property image">
-    </div>
-    <div class="modal-caption">
-      <span id="modalCounter"></span>
-    </div>
-    <button class="modal-prev" id="modalPrev"><i class="fas fa-chevron-left"></i></button>
-    <button class="modal-next" id="modalNext"><i class="fas fa-chevron-right"></i></button>
-  </div>
-</div>
-
-<!-- ===== JAVASCRIPT ===== -->
-<script src="js/dashboard.js"></script>
+  <!-- ===== JAVASCRIPT ===== -->
+  <script src="js/dashboard.js"></script>
 
 </body>
 </html>

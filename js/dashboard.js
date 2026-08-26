@@ -23,6 +23,9 @@ let allProperties = [];
 let features = [];
 let selectedImages = [];
 let pendingFormData = null; // Store form data for retry
+let filterStatus = 'all';
+let filterType = 'all';
+let filterEstate = 'all';
 
 // =========================
 // API Configuration
@@ -141,6 +144,134 @@ const resetBtn = document.getElementById('resetForm');
 const propertyCountDisplay = document.getElementById('propertyCountDisplay');
 const paginationControls = document.getElementById('paginationControls');
 
+
+function getFilteredProperties() {
+  let filtered = [...allProperties];
+  let filterCount = 0;
+
+  // ── Filter by Status ──
+  if (filterStatus !== 'all') {
+    filtered = filtered.filter(p => p.status === filterStatus);
+    filterCount++;
+  }
+
+  // ── Filter by Property Type ──
+  if (filterType !== 'all') {
+    filtered = filtered.filter(p => p.propertyType === filterType);
+    filterCount++;
+  }
+
+  // ── Filter by Estate ──
+  if (filterEstate !== 'all') {
+    filtered = filtered.filter(p => p.estate === filterEstate);
+    filterCount++;
+  }
+
+  return {
+    properties: filtered,
+    count: filtered.length,
+    hasFilters: filterCount > 0
+  };
+}
+
+function applyFilters() {
+  const { properties, count, hasFilters } = getFilteredProperties();
+  
+  // Update the filtered data
+  const filteredData = properties;
+  
+  // Re-render the table with filtered data
+  if (filteredData.length === 0) {
+    propertiesTable.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center" style="padding:40px;">
+          <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
+          <p style="color:var(--text-light);">No properties match your filters</p>
+          <button class="btn btn-outline" id="clearFiltersFromEmpty" style="margin-top:12px;">
+            <i class="fas fa-times"></i> Clear Filters
+          </button>
+        </td>
+      </tr>
+    `;
+    document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
+  } else {
+    // Use the existing render but pass filtered data
+    const currentPage = PropertiesTable.currentPage;
+    const itemsPerPage = PropertiesTable.itemsPerPage;
+    const start = (currentPage - 1) * itemsPerPage;
+    const paginated = filteredData.slice(start, start + itemsPerPage);
+    
+    // Temporarily override allProperties for rendering
+    const originalAllProperties = allProperties;
+    allProperties = filteredData;
+    PropertiesTable.renderPage();
+    PropertiesTable.renderPagination();
+    allProperties = originalAllProperties; // Restore
+  }
+
+  // Update result count
+  const resultSpan = document.getElementById('filterResultCount');
+  if (resultSpan) {
+    if (hasFilters) {
+      resultSpan.innerHTML = `Showing <span>${count}</span> of ${allProperties.length} properties`;
+    } else {
+      resultSpan.innerHTML = `Showing <span>${count}</span> properties`;
+    }
+  }
+
+  // Update property count display
+  if (propertyCountDisplay) {
+    propertyCountDisplay.textContent = allProperties.length;
+  }
+}
+
+// =========================
+// Clear Filters
+// =========================
+function clearFilters() {
+  document.getElementById('filterStatus').value = 'all';
+  document.getElementById('filterType').value = 'all';
+  document.getElementById('filterEstate').value = 'all';
+  filterStatus = 'all';
+  filterType = 'all';
+  filterEstate = 'all';
+  applyFilters();
+}
+
+// =========================
+// Filter Change Handlers
+// =========================
+function initFilters() {
+  const statusSelect = document.getElementById('filterStatus');
+  const typeSelect = document.getElementById('filterType');
+  const estateSelect = document.getElementById('filterEstate');
+  const clearBtn = document.getElementById('clearFiltersBtn');
+
+  if (statusSelect) {
+    statusSelect.addEventListener('change', function() {
+      filterStatus = this.value;
+      applyFilters();
+    });
+  }
+
+  if (typeSelect) {
+    typeSelect.addEventListener('change', function() {
+      filterType = this.value;
+      applyFilters();
+    });
+  }
+
+  if (estateSelect) {
+    estateSelect.addEventListener('change', function() {
+      filterEstate = this.value;
+      applyFilters();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearFilters);
+  }
+}
 // =========================
 // Dynamic Price Label / Hint
 // =========================
@@ -380,34 +511,58 @@ const FeaturesManager = {
 // Form Management
 // =========================
 const FormManager = {
-    reset() {
-        propertyForm?.reset();
-        currentEditId = null;
-        existingImages = [];
-        existingPublicIds = [];
-        features = [];
-        ImageManager.selectedImages = [];
-        document.getElementById('listingType').value = 'sale';
-        document.getElementById('isAirbnb').value = 'false';
-        document.querySelectorAll('.transaction-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.transaction === 'sale') btn.classList.add('active');
-        });
-        document.getElementById('features').value = '[]';
-        FeaturesManager.displayFeatures();
-        imageInput.value = '';
-        imagePreview.innerHTML = '<p class="text-muted">No images selected</p>';
-        existingPreview.innerHTML = '<p class="text-muted">No existing images</p>';
-        formTitle.textContent = 'Add New Property';
-        submitBtn.innerHTML = '<i class="fas fa-save"></i> Create Property';
-        submitBtn.disabled = false;
-        formStatus.style.display = 'none';
-        document.getElementById('propertyId').value = '';
-        const typeSelect = document.getElementById('propertyType');
-        if (typeSelect) typeSelect.value = '';
-        updatePriceField();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    },
+   reset() {
+    // ── Reset form fields ──
+    propertyForm?.reset();
+    currentEditId = null;
+    existingImages = [];
+    existingPublicIds = [];
+    features = [];
+    ImageManager.selectedImages = [];
+
+    // ── Reset listing type to default ──
+    document.getElementById('listingType').value = 'sale';
+    document.getElementById('isAirbnb').value = 'false';
+    document.querySelectorAll('.transaction-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.transaction === 'sale') btn.classList.add('active');
+    });
+
+    // ── Reset features ──
+    document.getElementById('features').value = '[]';
+    FeaturesManager.displayFeatures();
+
+    // ── Reset images ──
+    imageInput.value = '';
+    imagePreview.innerHTML = '<p class="text-muted">No images selected</p>';
+    existingPreview.innerHTML = '<p class="text-muted">No existing images</p>';
+
+    // ── Reset form title and button ──
+    formTitle.textContent = 'Add New Property';
+    submitBtn.innerHTML = '<i class="fas fa-save"></i> Create Property';
+    submitBtn.disabled = false;
+    formStatus.style.display = 'none';
+    document.getElementById('propertyId').value = '';
+
+    // ── Reset property type dropdown ──
+    const typeSelect = document.getElementById('propertyType');
+    if (typeSelect) typeSelect.value = '';
+
+    // ── Reset price label/hint ──
+    updatePriceField();
+
+    // ── ★ NEW: Clear validation states ──
+    document.querySelectorAll('.form-control').forEach(el => {
+        el.classList.remove('is-valid', 'is-invalid');
+    });
+
+    // ── ★ NEW: Remove red border from image upload area ──
+    const imageGroup = document.querySelector('.form-group:has(#images)');
+    if (imageGroup) imageGroup.style.border = '';
+
+    // ── Scroll to top ──
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+},
 
     populateForEdit(property) {
         currentEditId = property._id;
@@ -549,170 +704,303 @@ const PropertyAPI = {
 // Properties Table
 // =========================
 const PropertiesTable = {
-    currentPage: 1,
-    itemsPerPage: 10,
+  currentPage: 1,
+  itemsPerPage: 10,
+  sortField: 'createdAt',    // default sort
+  sortDirection: 'desc',     // 'asc' or 'desc'
 
-    render(properties) {
-        allProperties = properties;
-        this.currentPage = 1;
+  // ── Get filtered + sorted properties ──
+  getFilteredAndSortedProperties() {
+    // 1. Start with all properties
+    let filtered = [...allProperties];
+
+    // 2. Apply filters (from global filter variables)
+    if (filterStatus && filterStatus !== 'all') {
+      filtered = filtered.filter(p => p.status === filterStatus);
+    }
+    if (filterType && filterType !== 'all') {
+      filtered = filtered.filter(p => p.propertyType === filterType);
+    }
+    if (filterEstate && filterEstate !== 'all') {
+      filtered = filtered.filter(p => p.estate === filterEstate);
+    }
+
+    // 3. Apply sorting
+    const field = this.sortField;
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    filtered.sort((a, b) => {
+      let valA = a[field] ?? '';
+      let valB = b[field] ?? '';
+      if (field === 'price') {
+        valA = Number(valA);
+        valB = Number(valB);
+      } else if (field === 'title' || field === 'estate' || field === 'propertyType') {
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+      } else if (field === 'createdAt') {
+        valA = new Date(valA).getTime();
+        valB = new Date(valB).getTime();
+      }
+      if (valA < valB) return -1 * dir;
+      if (valA > valB) return 1 * dir;
+      return 0;
+    });
+
+    return filtered;
+  },
+
+  // ── Render the table with current filters + sorting ──
+  render(properties) {
+    allProperties = properties;
+    this.currentPage = 1;
+    // Reset sort to default
+    this.sortField = 'createdAt';
+    this.sortDirection = 'desc';
+    this.renderPage();
+    this.renderPagination();
+    if (propertyCountDisplay) propertyCountDisplay.textContent = properties.length;
+  },
+
+  renderPage() {
+    if (!propertiesTable) return;
+
+    // Get filtered + sorted data
+    const displayProperties = this.getFilteredAndSortedProperties();
+
+    const start = (this.currentPage - 1) * this.itemsPerPage;
+    const pageProperties = displayProperties.slice(start, start + this.itemsPerPage);
+
+    if (!displayProperties.length) {
+      propertiesTable.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center" style="padding:40px;">
+            <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
+            <p style="color:var(--text-light);">No properties match your current filters</p>
+            <button class="btn btn-outline" id="clearFiltersFromEmpty" style="margin-top:12px;">
+              <i class="fas fa-times"></i> Clear Filters
+            </button>
+          </td>
+        </tr>
+      `;
+      document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
+      return;
+    }
+
+    // Build table rows
+    propertiesTable.innerHTML = '';
+    pageProperties.forEach(property => {
+      const tr = document.createElement('tr');
+      const thumbSrc = property.images && property.images[0]
+        ? property.images[0]
+        : 'https://via.placeholder.com/44x34?text=No+Img';
+      let listingDisplay = (property.listingType || '').toUpperCase();
+      if (property.isAirbnb) listingDisplay = 'AIRBNB';
+
+      tr.innerHTML = `
+        <td><strong>${this.escapeHtml(property.title)}</strong></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
+                 data-property-id="${property._id}" class="thumbnail-clickable">
+            <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
+          </div>
+        </td>
+        <td>${this.escapeHtml(property.estate || '')}</td>
+        <td>${this.escapeHtml(property.propertyType || '')}</td>
+        <td>${listingDisplay}</td>
+        <td>${Utils.formatPrice(property.price)}</td>
+        <td><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
+        <td class="actions">
+          <button class="btn btn-outline edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
+          <button class="btn btn-danger delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
+        </td>
+      `;
+      propertiesTable.appendChild(tr);
+    });
+
+    // Update result count (outside the table)
+    const resultSpan = document.getElementById('filterResultCount');
+    if (resultSpan) {
+      const hasFilters = (filterStatus !== 'all' || filterType !== 'all' || filterEstate !== 'all');
+      if (hasFilters) {
+        resultSpan.innerHTML = `Showing <span>${displayProperties.length}</span> of ${allProperties.length} properties`;
+      } else {
+        resultSpan.innerHTML = `Showing <span>${displayProperties.length}</span> properties`;
+      }
+    }
+
+    this.attachEventListeners();
+
+    // ── Attach sort handlers to table headers ──
+    this.attachSortHandlers();
+  },
+
+  // ── Render pagination using filtered data ──
+  renderPagination() {
+    if (!paginationControls) return;
+    const displayProperties = this.getFilteredAndSortedProperties();
+    const totalPages = Math.ceil(displayProperties.length / this.itemsPerPage);
+
+    if (totalPages <= 1) {
+      paginationControls.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    if (this.currentPage > 1) {
+      html += `<button class="pagination-btn" data-page="${this.currentPage - 1}">Prev</button>`;
+    }
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === this.currentPage) {
+        html += `<button class="pagination-btn active" data-page="${i}">${i}</button>`;
+      } else if (Math.abs(i - this.currentPage) <= 2 || i === 1 || i === totalPages) {
+        html += `<button class="pagination-btn" data-page="${i}">${i}</button>`;
+      } else if (Math.abs(i - this.currentPage) === 3) {
+        html += `<span style="margin:0 4px;">...</span>`;
+      }
+    }
+    if (this.currentPage < totalPages) {
+      html += `<button class="pagination-btn" data-page="${this.currentPage + 1}">Next</button>`;
+    }
+
+    paginationControls.innerHTML = html;
+    paginationControls.querySelectorAll('.pagination-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const page = parseInt(btn.dataset.page);
+        if (!isNaN(page)) {
+          this.currentPage = page;
+          this.renderPage();
+          this.renderPagination();
+        }
+      });
+    });
+  },
+
+  // ── Attach sort handlers to column headers ──
+  attachSortHandlers() {
+    const sortableFields = [
+      { id: 'title', label: 'Title' },
+      { id: 'estate', label: 'Estate' },
+      { id: 'propertyType', label: 'Type' },
+      { id: 'price', label: 'Price' },
+      { id: 'status', label: 'Status' },
+      { id: 'createdAt', label: 'Date' }
+    ];
+
+    // Find the table header row
+    const thead = document.querySelector('#propertiesTable thead');
+    if (!thead) return;
+
+    // Remove existing sort indicators
+    thead.querySelectorAll('th').forEach(th => {
+      th.style.cursor = 'pointer';
+      th.title = 'Click to sort';
+      // Remove old click listeners (we'll re-bind)
+      const newTh = th.cloneNode(true);
+      th.parentNode.replaceChild(newTh, th);
+    });
+
+    // Add click listeners to each sortable column
+    const headers = thead.querySelectorAll('th');
+    headers.forEach((th, index) => {
+      const field = sortableFields[index]?.id;
+      if (!field) return;
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        // Toggle direction if same field, else set to asc
+        if (this.sortField === field) {
+          this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          this.sortField = field;
+          this.sortDirection = 'asc';
+        }
+        this.currentPage = 1; // reset to first page
         this.renderPage();
         this.renderPagination();
-        if (propertyCountDisplay) propertyCountDisplay.textContent = properties.length;
-    },
+      });
 
-    renderPage() {
-        if (!propertiesTable) return;
-        const start = (this.currentPage - 1) * this.itemsPerPage;
-        const pageProperties = allProperties.slice(start, start + this.itemsPerPage);
+      // Show current sort indicator
+      if (this.sortField === field) {
+        const arrow = this.sortDirection === 'asc' ? ' ▲' : ' ▼';
+        th.textContent = th.textContent.replace(/[ ▲▼]/g, '') + arrow;
+      }
+    });
+  },
 
-        if (!allProperties.length) {
-            propertiesTable.innerHTML = `
-                <tr>
-                    <td colspan="8" class="text-center" style="padding:40px;">
-                        <i class="fas fa-home fa-2x mb-3"></i>
-                        <p>No properties yet. Start by adding one above!</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
+  // ── Other helper methods ──
+  escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  },
 
-        propertiesTable.innerHTML = '';
-        pageProperties.forEach(property => {
-            const tr = document.createElement('tr');
-            const thumbSrc = property.images && property.images[0] ? property.images[0] : 'https://via.placeholder.com/44x34?text=No+Img';
-            let listingDisplay = (property.listingType || '').toUpperCase();
-            if (property.isAirbnb) listingDisplay = 'AIRBNB';
-            tr.innerHTML = `
-                <td><strong>${this.escapeHtml(property.title)}</strong></td>
-                <td>
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
-                             data-property-id="${property._id}" class="thumbnail-clickable">
-                        <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
-                    </div>
-                </td>
-                <td>${this.escapeHtml(property.estate || '')}</td>
-                <td>${this.escapeHtml(property.propertyType || '')}</td>
-                <td>${listingDisplay}</td>
-                <td>${Utils.formatPrice(property.price)}</td>
-                <td><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
-                <td class="actions">
-                    <button class="btn btn-outline edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
-                    <button class="btn btn-danger delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
-                </td>
-            `;
-            propertiesTable.appendChild(tr);
-        });
-        this.attachEventListeners();
-    },
-
-    renderPagination() {
-        if (!paginationControls) return;
-        const totalPages = Math.ceil(allProperties.length / this.itemsPerPage);
-        if (totalPages <= 1) {
-            paginationControls.innerHTML = '';
-            return;
-        }
-        let html = '';
-        if (this.currentPage > 1) {
-            html += `<button class="pagination-btn" data-page="${this.currentPage - 1}">Prev</button>`;
-        }
-        for (let i = 1; i <= totalPages; i++) {
-            if (i === this.currentPage) {
-                html += `<button class="pagination-btn active" data-page="${i}">${i}</button>`;
-            } else if (Math.abs(i - this.currentPage) <= 2 || i === 1 || i === totalPages) {
-                html += `<button class="pagination-btn" data-page="${i}">${i}</button>`;
-            } else if (Math.abs(i - this.currentPage) === 3) {
-                html += `<span style="margin:0 4px;">...</span>`;
-            }
-        }
-        if (this.currentPage < totalPages) {
-            html += `<button class="pagination-btn" data-page="${this.currentPage + 1}">Next</button>`;
-        }
-        paginationControls.innerHTML = html;
-        paginationControls.querySelectorAll('.pagination-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const page = parseInt(btn.dataset.page);
-                if (!isNaN(page)) {
-                    this.currentPage = page;
-                    this.renderPage();
-                    this.renderPagination();
-                }
-            });
-        });
-    },
-
-    escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    },
-
-    attachEventListeners() {
-        propertiesTable.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const id = btn.dataset.id;
-                try {
-                    const property = await PropertyAPI.getPropertyById(id);
-                    FormManager.populateForEdit(property);
-                } catch (error) {
-                    Utils.showToast('Failed to load property', 'error');
-                }
-            });
-        });
-
-        propertiesTable.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const id = btn.dataset.id;
-                if (!confirm('Delete this property permanently?')) return;
-                try {
-                    await PropertyAPI.deleteProperty(id);
-                    Utils.showToast('Property deleted');
-                    await PropertiesTable.loadAndRender();
-                    if (currentEditId === id) FormManager.reset();
-                } catch (error) {
-                    Utils.showToast('Failed to delete', 'error');
-                }
-            });
-        });
-
-        propertiesTable.querySelectorAll('.thumbnail-clickable').forEach(thumb => {
-            thumb.addEventListener('click', () => {
-                const id = thumb.dataset.propertyId;
-                const property = allProperties.find(p => p._id === id);
-                if (property && property.images && property.images.length) {
-                    ImageModal.open(property.images);
-                }
-            });
-        });
-    },
-
-    async loadAndRender() {
-        this.showLoading();
+  attachEventListeners() {
+    // Edit buttons
+    propertiesTable.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
         try {
-            const properties = await PropertyAPI.fetchMyProperties();
-            this.render(properties);
+          const property = await PropertyAPI.getPropertyById(id);
+          FormManager.populateForEdit(property);
         } catch (error) {
-            this.showError(error.message);
+          Utils.showToast('Failed to load property', 'error');
         }
-    },
+      });
+    });
 
-    showLoading() {
-        if (!propertiesTable) return;
-        propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
-        if (paginationControls) paginationControls.innerHTML = '';
-    },
+    // Delete buttons
+    propertiesTable.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        if (!confirm('Delete this property permanently?')) return;
+        try {
+          await PropertyAPI.deleteProperty(id);
+          Utils.showToast('Property deleted');
+          await PropertiesTable.loadAndRender();
+          if (currentEditId === id) FormManager.reset();
+        } catch (error) {
+          Utils.showToast('Failed to delete', 'error');
+        }
+      });
+    });
 
-    showError(error) {
-        if (!propertiesTable) return;
-        propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;color:red;padding:40px;">Error: ${error}</td></tr>`;
-        if (paginationControls) paginationControls.innerHTML = '';
+    // Thumbnail click -> open image modal
+    propertiesTable.querySelectorAll('.thumbnail-clickable').forEach(thumb => {
+      thumb.addEventListener('click', () => {
+        const id = thumb.dataset.propertyId;
+        const property = allProperties.find(p => p._id === id);
+        if (property && property.images && property.images.length) {
+          ImageModal.open(property.images);
+        }
+      });
+    });
+  },
+
+  async loadAndRender() {
+    this.showLoading();
+    try {
+      const properties = await PropertyAPI.fetchMyProperties();
+      this.render(properties);
+    } catch (error) {
+      this.showError(error.message);
     }
+  },
+
+  showLoading() {
+    if (!propertiesTable) return;
+    propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
+    if (paginationControls) paginationControls.innerHTML = '';
+  },
+
+  showError(error) {
+    if (!propertiesTable) return;
+    propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;color:red;padding:40px;">Error: ${error}</td></tr>`;
+    if (paginationControls) paginationControls.innerHTML = '';
+  }
 };
 
 // =========================
@@ -969,112 +1257,168 @@ function computeAvailabilityFields() {
 // =========================
 // Form Submit Handler (UPDATED)
 // =========================
+// =========================
+// Form Submit Handler (UPDATED with inline validation)
+// =========================
 async function handleFormSubmit(e) {
-    e.preventDefault();
+  e.preventDefault();
 
-    // ── Validation ──────────────────────────────────────────────
-    const title = document.getElementById('title')?.value.trim();
-    const estate = document.getElementById('estate')?.value.trim();
-    const county = document.getElementById('county')?.value.trim();
-    const price = parseFloat(document.getElementById('price')?.value || 0);
-    const description = document.getElementById('description')?.value.trim();
-    const propertyType = document.getElementById('propertyType')?.value;
+  // ── Clear previous validation states ──
+  document.querySelectorAll('.form-control').forEach(el => {
+    el.classList.remove('is-valid', 'is-invalid');
+  });
 
-    if (!title) { Utils.showToast('Title is required', 'error'); return; }
-    if (!estate) { Utils.showToast('Estate is required', 'error'); return; }
-    if (!county) { Utils.showToast('County is required', 'error'); return; }
-    if (!propertyType) { Utils.showToast('Property type is required', 'error'); return; }
-    if (isNaN(price) || price <= 0) { Utils.showToast('Valid price is required', 'error'); return; }
-    if (!description) { Utils.showToast('Description is required', 'error'); return; }
+  // ── Define fields to validate ──
+  const fields = [
+    { id: 'title', msg: 'Please enter a property title' },
+    { id: 'propertyType', msg: 'Please select a property type' },
+    { id: 'estate', msg: 'Please enter the estate/area' },
+    { id: 'county', msg: 'Please enter the county' },
+    { id: 'price', msg: 'Please enter a valid price' },
+    { id: 'description', msg: 'Please enter a description' }
+  ];
 
-    if (!currentEditId && ImageManager.getNewImages().length === 0) {
-        Utils.showToast('Please select at least one image', 'error');
-        return;
+  let isValid = true;
+  let firstInvalidEl = null;
+
+  for (const field of fields) {
+    const el = document.getElementById(field.id);
+    if (!el) continue;
+    let value = el.value.trim();
+    if (el.type === 'number') {
+      value = parseFloat(value);
+      if (isNaN(value) || value <= 0) {
+        el.classList.add('is-invalid');
+        isValid = false;
+        if (!firstInvalidEl) firstInvalidEl = el;
+        continue;
+      }
     }
+    if (!value) {
+      el.classList.add('is-invalid');
+      isValid = false;
+      if (!firstInvalidEl) firstInvalidEl = el;
+    } else {
+      el.classList.add('is-valid');
+    }
+  }
 
-    // ── Compute available_for and rental_type ──────────────────
-    const { availableFor, rentalType } = computeAvailabilityFields();
+  // ── Image validation (for new properties only) ──
+  if (!currentEditId && ImageManager.getNewImages().length === 0) {
+    Utils.showToast('Please select at least one image', 'error');
+    const imageGroup = document.querySelector('.form-group:has(#images)');
+    if (imageGroup) {
+      imageGroup.style.border = '2px solid #dc3545';
+      setTimeout(() => { imageGroup.style.border = ''; }, 3000);
+    }
+    isValid = false;
+  }
 
-    // ── Build FormData ──────────────────────────────────────────
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('listingType', document.getElementById('listingType')?.value || 'sale');
-    formData.append('isAirbnb', document.getElementById('isAirbnb')?.value === 'true');
-    formData.append('propertyType', propertyType);
-    formData.append('estate', estate);
-    formData.append('county', county);
-    formData.append('price', price);
-    formData.append('bedrooms', document.getElementById('bedrooms')?.value || 0);
-    formData.append('bathrooms', document.getElementById('bathrooms')?.value || 0);
-    formData.append('parking', document.getElementById('parking')?.value || 0);
-    formData.append('size', document.getElementById('size')?.value || '');
-    formData.append('status', document.getElementById('status')?.value || 'available');
-    formData.append('description', description);
-    formData.append('amenities', JSON.stringify(features));
+  if (!isValid) {
+    if (firstInvalidEl) {
+      firstInvalidEl.focus();
+      firstInvalidEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    Utils.showToast('Please fix the highlighted fields', 'error');
+    return;
+  }
 
-    // ★ NEW: Append computed availability fields
-    formData.append('available_for', availableFor);
-    formData.append('rental_type', rentalType);
+  // ── ★ NEW: Get form element and add loading state ──
+  const form = document.getElementById('propertyForm');
+  form.classList.add('form-loading');
 
-    // Append new images
-    ImageManager.getNewImages().forEach(file => formData.append('images', file));
+  // ── If all validations pass, proceed with submission ──
+  const title = document.getElementById('title')?.value.trim();
+  const estate = document.getElementById('estate')?.value.trim();
+  const county = document.getElementById('county')?.value.trim();
+  const price = parseFloat(document.getElementById('price')?.value || 0);
+  const description = document.getElementById('description')?.value.trim();
+  const propertyType = document.getElementById('propertyType')?.value;
 
+  // ── Compute available_for and rental_type ──────────────────
+  const { availableFor, rentalType } = computeAvailabilityFields();
+
+  // ── Build FormData ──────────────────────────────────────────
+  const formData = new FormData();
+  formData.append('title', title);
+  formData.append('listingType', document.getElementById('listingType')?.value || 'sale');
+  formData.append('isAirbnb', document.getElementById('isAirbnb')?.value === 'true');
+  formData.append('propertyType', propertyType);
+  formData.append('estate', estate);
+  formData.append('county', county);
+  formData.append('price', price);
+  formData.append('bedrooms', document.getElementById('bedrooms')?.value || 0);
+  formData.append('bathrooms', document.getElementById('bathrooms')?.value || 0);
+  formData.append('parking', document.getElementById('parking')?.value || 0);
+  formData.append('size', document.getElementById('size')?.value || '');
+  formData.append('status', document.getElementById('status')?.value || 'available');
+  formData.append('description', description);
+  formData.append('amenities', JSON.stringify(features));
+
+  // Append computed availability fields
+  formData.append('available_for', availableFor);
+  formData.append('rental_type', rentalType);
+
+  // Append new images
+  ImageManager.getNewImages().forEach(file => formData.append('images', file));
+
+  if (currentEditId) {
+    formData.append('existingImages', JSON.stringify(existingImages));
+    formData.append('existingPublicIds', JSON.stringify(existingPublicIds));
+  }
+
+  // ── Disable submit button ──────────────────────────────────
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${currentEditId ? 'Updating...' : 'Creating...'}`;
+
+  try {
     if (currentEditId) {
-        formData.append('existingImages', JSON.stringify(existingImages));
-        formData.append('existingPublicIds', JSON.stringify(existingPublicIds));
+      await PropertyAPI.updateProperty(currentEditId, formData);
+      Utils.showToast('Property updated successfully');
+      FormManager.reset();
+      await PropertiesTable.loadAndRender();
+    } else {
+      await PropertyAPI.createProperty(formData);
+      Utils.showToast('Property created successfully');
+      FormManager.reset();
+      await PropertiesTable.loadAndRender();
     }
+  } catch (error) {
+    console.error('Save error:', error);
+    const errorMsg = error.message || '';
+    const isSubscriptionError =
+        errorMsg.toLowerCase().includes('subscription') ||
+        errorMsg.toLowerCase().includes('subscribe') ||
+        errorMsg.toLowerCase().includes('upgrade');
 
-    // ── Disable submit button ──────────────────────────────────
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${currentEditId ? 'Updating...' : 'Creating...'}`;
-
-    try {
-        if (currentEditId) {
-            await PropertyAPI.updateProperty(currentEditId, formData);
-            Utils.showToast('Property updated successfully');
-            FormManager.reset();
-            await PropertiesTable.loadAndRender();
-        } else {
-            await PropertyAPI.createProperty(formData);
-            Utils.showToast('Property created successfully');
-            FormManager.reset();
-            await PropertiesTable.loadAndRender();
+    if (isSubscriptionError) {
+      pendingFormData = formData;
+      Utils.showToast('📢 You need a subscription to list properties. Upgrade now!', 'warning');
+      setTimeout(() => {
+        openUpgradeModal();
+        const subCard = document.getElementById('subscriptionCard');
+        if (subCard) {
+          subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          subCard.style.borderColor = '#c5a059';
+          subCard.style.boxShadow = '0 0 20px rgba(197, 160, 89, 0.3)';
+          setTimeout(() => {
+            subCard.style.borderColor = '#2c2c2c';
+            subCard.style.boxShadow = 'none';
+          }, 3000);
         }
-    } catch (error) {
-        console.error('Save error:', error);
-        const errorMsg = error.message || '';
-        const isSubscriptionError =
-            errorMsg.toLowerCase().includes('subscription') ||
-            errorMsg.toLowerCase().includes('subscribe') ||
-            errorMsg.toLowerCase().includes('upgrade');
-
-        if (isSubscriptionError) {
-            pendingFormData = formData;
-            Utils.showToast('📢 You need a subscription to list properties. Upgrade now!', 'warning');
-            setTimeout(() => {
-                openUpgradeModal();
-                const subCard = document.getElementById('subscriptionCard');
-                if (subCard) {
-                    subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    subCard.style.borderColor = '#c5a059';
-                    subCard.style.boxShadow = '0 0 20px rgba(197, 160, 89, 0.3)';
-                    setTimeout(() => {
-                        subCard.style.borderColor = '#2c2c2c';
-                        subCard.style.boxShadow = 'none';
-                    }, 3000);
-                }
-            }, 500);
-        } else {
-            Utils.showToast(errorMsg || 'Failed to save property', 'error');
-        }
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = currentEditId
-            ? '<i class="fas fa-save"></i> Update Property'
-            : '<i class="fas fa-save"></i> Create Property';
+      }, 500);
+    } else {
+      Utils.showToast(errorMsg || 'Failed to save property', 'error');
     }
+  } finally {
+    // ── ★ NEW: Remove loading state ──
+    form.classList.remove('form-loading');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = currentEditId
+        ? '<i class="fas fa-save"></i> Update Property'
+        : '<i class="fas fa-save"></i> Create Property';
+  }
 }
-
 // =========================
 // Upgrade Modal (UPDATED)
 // =========================
