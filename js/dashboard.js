@@ -1309,8 +1309,6 @@ async function loadSubscriptionData() {
         const badge = document.getElementById('planBadge');
         const dot = document.getElementById('planStatusDot');
 
-        // ❌ REMOVED: const statusText = document.getElementById('planStatus');
-
         if (isActive) {
             // ── Active subscription ──────────────────────────────
             if (badge) {
@@ -1431,12 +1429,13 @@ async function loadSubscriptionData() {
             }
         }
 
+        // ── Update visibility tier ──
+        // ✅ Now inside the try block, after plan and isActive are defined
+        updateVisibilityTier(plan, isActive);
+
     } catch (error) {
         console.error('Error loading subscription data:', error);
     }
-
-    // ── Update visibility tier ──
-  updateVisibilityTier(plan, isActive);
 }
 
 // =========================
