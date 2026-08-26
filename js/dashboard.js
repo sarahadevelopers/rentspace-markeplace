@@ -1233,7 +1233,7 @@ async function loadSubscriptionData() {
 
         const plan = user.subscriptionPlan || null;
         const expiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        
+
         // No free plan: either has paid plan or none
         const isActive = plan && ['basic', 'pro', 'developer'].includes(plan) && expiry && expiry > new Date();
 
@@ -1265,32 +1265,40 @@ async function loadSubscriptionData() {
         // ── Update badge ──────────────────────────────────────────
         const badge = document.getElementById('planBadge');
         const dot = document.getElementById('planStatusDot');
-        const statusText = document.getElementById('planStatus');
+
+        // ❌ REMOVED: const statusText = document.getElementById('planStatus');
 
         if (isActive) {
             // ── Active subscription ──────────────────────────────
-            badge.textContent = planDisplayName;
-            badge.className = 'plan-badge active';
-            dot.className = 'plan-status-dot active';
-            statusText.textContent = 'Active';
-            statusText.style.color = '#4CAF50';
+            if (badge) {
+                badge.textContent = planDisplayName;
+                badge.className = 'plan-badge active';
+            }
+            if (dot) {
+                dot.className = 'plan-status-dot active';
+            }
 
-            document.getElementById('currentPlan').textContent = planDisplayName;
-            document.getElementById('planExpiry').textContent = expiry ? expiry.toLocaleDateString() : '—';
-            document.getElementById('listingsUsed').textContent = listingsUsed;
+            // Update plan details
+            const currentPlanEl = document.getElementById('currentPlan');
+            if (currentPlanEl) currentPlanEl.textContent = planDisplayName;
 
-            // Price
+            const expiryEl = document.getElementById('planExpiry');
+            if (expiryEl) expiryEl.textContent = expiry ? expiry.toLocaleDateString() : '—';
+
+            const usedEl = document.getElementById('listingsUsed');
+            if (usedEl) usedEl.textContent = listingsUsed;
+
+            const priceEl = document.getElementById('planPrice');
             const priceMap = {
                 basic: 'KES 2,500/mo',
                 pro: 'KES 5,000/mo',
                 developer: 'KES 10,000/mo'
             };
-            document.getElementById('planPrice').textContent = priceMap[plan] || '—';
+            if (priceEl) priceEl.textContent = priceMap[plan] || '—';
 
-            // Max listings display
-            const maxListingsDisplay = document.getElementById('maxListingsDisplay');
-            if (maxListingsDisplay) {
-                maxListingsDisplay.textContent = isUnlimited ? '♾️' : `/ ${maxListings}`;
+            const maxDisplay = document.getElementById('maxListingsDisplay');
+            if (maxDisplay) {
+                maxDisplay.textContent = isUnlimited ? '♾️' : `/ ${maxListings}`;
             }
 
             // ── Progress bar ──────────────────────────────────────
@@ -1300,73 +1308,90 @@ async function loadSubscriptionData() {
             const progressTotal = document.getElementById('progressTotal');
             const progressStatus = document.getElementById('progressStatus');
 
-            progressWrapper.style.display = 'block';
-            progressUsed.textContent = listingsUsed;
-            progressTotal.textContent = isUnlimited ? '♾️' : maxListings;
-            progressBar.style.width = isUnlimited ? '50%' : percentage + '%';
-
-            progressBar.classList.remove('warning', 'danger');
-            if (!isUnlimited && percentage > 90) progressBar.classList.add('danger');
-            else if (!isUnlimited && percentage > 70) progressBar.classList.add('warning');
-
-            if (isUnlimited) {
-                progressStatus.textContent = '♾️ Unlimited listings on this plan';
-            } else if (percentage > 90) {
-                progressStatus.textContent = '⚠️ You\'re near your listing limit!';
-            } else {
-                progressStatus.textContent = `${Math.round(100 - percentage)}% of your slots remaining`;
+            if (progressWrapper) progressWrapper.style.display = 'block';
+            if (progressUsed) progressUsed.textContent = listingsUsed;
+            if (progressTotal) progressTotal.textContent = isUnlimited ? '♾️' : maxListings;
+            if (progressBar) {
+                progressBar.style.width = isUnlimited ? '50%' : percentage + '%';
+                progressBar.classList.remove('warning', 'danger');
+                if (!isUnlimited && percentage > 90) progressBar.classList.add('danger');
+                else if (!isUnlimited && percentage > 70) progressBar.classList.add('warning');
+            }
+            if (progressStatus) {
+                if (isUnlimited) {
+                    progressStatus.textContent = '♾️ Unlimited listings on this plan';
+                } else if (percentage > 90) {
+                    progressStatus.textContent = '⚠️ You\'re near your listing limit!';
+                } else {
+                    progressStatus.textContent = `${Math.round(100 - percentage)}% of your slots remaining`;
+                }
             }
 
             // ── Actions ────────────────────────────────────────────
-            document.getElementById('planActions').innerHTML = `
-                <div style="text-align: right; font-size: 13px; color: var(--text-muted); padding: 8px 0;">
-                    <i class="fas fa-check-circle" style="color: #4CAF50;"></i> Your plan is active
-                    <a href="#" id="manageSubscriptionLink" style="color: var(--gold); margin-left: 12px; text-decoration: none;">
-                        Manage
-                    </a>
-                </div>
-            `;
-            document.getElementById('manageSubscriptionLink')?.addEventListener('click', (e) => {
-                e.preventDefault();
-                Utils.showToast('Manage subscription page coming soon.', 'info');
-            });
+            const actionsContainer = document.getElementById('planActions');
+            if (actionsContainer) {
+                actionsContainer.innerHTML = `
+                    <div style="text-align: right; font-size: 13px; color: var(--text-muted); padding: 8px 0;">
+                        <i class="fas fa-check-circle" style="color: #4CAF50;"></i> Your plan is active
+                        <a href="#" id="manageSubscriptionLink" style="color: var(--gold); margin-left: 12px; text-decoration: none;">
+                            Manage
+                        </a>
+                    </div>
+                `;
+                document.getElementById('manageSubscriptionLink')?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    Utils.showToast('Manage subscription page coming soon.', 'info');
+                });
+            }
 
         } else {
             // ── No subscription ──────────────────────────────────
-            badge.textContent = 'No Subscription';
-            badge.className = 'plan-badge inactive';
-            dot.className = 'plan-status-dot inactive';
-            statusText.textContent = 'Inactive';
-            statusText.style.color = '#ff6b6b';
+            if (badge) {
+                badge.textContent = 'No Subscription';
+                badge.className = 'plan-badge inactive';
+            }
+            if (dot) {
+                dot.className = 'plan-status-dot inactive';
+            }
 
-            document.getElementById('currentPlan').textContent = 'No Active Subscription';
-            document.getElementById('planExpiry').textContent = '—';
-            document.getElementById('listingsUsed').textContent = '—';
-            document.getElementById('planPrice').textContent = '—';
+            const currentPlanEl = document.getElementById('currentPlan');
+            if (currentPlanEl) currentPlanEl.textContent = 'No Active Subscription';
 
-            const maxListingsDisplay = document.getElementById('maxListingsDisplay');
-            if (maxListingsDisplay) maxListingsDisplay.textContent = '';
+            const expiryEl = document.getElementById('planExpiry');
+            if (expiryEl) expiryEl.textContent = '—';
+
+            const usedEl = document.getElementById('listingsUsed');
+            if (usedEl) usedEl.textContent = '—';
+
+            const priceEl = document.getElementById('planPrice');
+            if (priceEl) priceEl.textContent = '—';
+
+            const maxDisplay = document.getElementById('maxListingsDisplay');
+            if (maxDisplay) maxDisplay.textContent = '';
 
             // ── Hide progress bar ──────────────────────────────────
-            document.getElementById('subProgressWrapper').style.display = 'none';
+            const progressWrapper = document.getElementById('subProgressWrapper');
+            if (progressWrapper) progressWrapper.style.display = 'none';
 
             // ── Show upgrade CTA ──────────────────────────────────
-            document.getElementById('planActions').innerHTML = `
-                <div class="upgrade-msg">
-                    <i class="fas fa-lock"></i> Subscribe to start listing properties
-                </div>
-                <button class="btn-upgrade" id="upgradeBtn">
-                    <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
-                </button>
-            `;
-            document.getElementById('upgradeBtn')?.addEventListener('click', openUpgradeModal);
+            const actionsContainer = document.getElementById('planActions');
+            if (actionsContainer) {
+                actionsContainer.innerHTML = `
+                    <div class="upgrade-msg">
+                        <i class="fas fa-lock"></i> Subscribe to start listing properties
+                    </div>
+                    <button class="btn-upgrade" id="upgradeBtn">
+                        <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
+                    </button>
+                `;
+                document.getElementById('upgradeBtn')?.addEventListener('click', openUpgradeModal);
+            }
         }
 
     } catch (error) {
         console.error('Error loading subscription data:', error);
     }
 }
-
 // =========================
 // Compute availability fields
 // =========================
