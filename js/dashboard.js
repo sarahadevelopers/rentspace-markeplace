@@ -87,6 +87,9 @@ const PropertiesTable = {
     this.renderPage();
     this.renderPagination();
     if (propertyCountDisplay) propertyCountDisplay.textContent = properties.length;
+ // ── Populate estate filter from the loaded properties ──
+    populateEstateFilter();
+
   },
 
   renderPage() {
@@ -477,6 +480,46 @@ function initFilters() {
   if (clearBtn) {
     clearBtn.addEventListener('click', clearFilters);
   }
+}
+
+// =========================
+// Populate Estate Filter from properties
+// =========================
+function populateEstateFilter() {
+    const select = document.getElementById('filterEstate');
+    if (!select) return;
+
+    // Get unique estates from allProperties, filter out empty/null
+    const estates = [...new Set(
+        allProperties
+            .map(p => p.estate)
+            .filter(e => e && e.trim() !== '')
+    )].sort(); // alphabetically
+
+    // Save the currently selected value (if any)
+    const currentValue = select.value;
+
+    // Clear existing options (keep the first "All Estates" option)
+    select.innerHTML = '<option value="all">All Estates</option>';
+
+    // Add options for each unique estate
+    estates.forEach(estate => {
+        const option = document.createElement('option');
+        option.value = estate;
+        option.textContent = estate;
+        select.appendChild(option);
+    });
+
+    // Restore selected value if it still exists, otherwise set to 'all'
+    if (estates.includes(currentValue)) {
+        select.value = currentValue;
+    } else {
+        select.value = 'all';
+        // If the current filter was set to a now-missing estate, reset it
+        if (filterEstate !== 'all' && !estates.includes(filterEstate)) {
+            filterEstate = 'all';
+        }
+    }
 }
 // =========================
 // API Configuration
