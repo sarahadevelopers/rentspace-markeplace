@@ -1221,10 +1221,11 @@ async function loadSubscriptionData() {
         const user = JSON.parse(localStorage.getItem('rentspace_user'));
         if (!user) return;
 
-        const plan = user.subscriptionPlan || 'free';
+        const plan = user.subscriptionPlan || null;
         const expiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        const isPaid = ['basic', 'pro', 'developer'].includes(plan);
-        const isExpired = expiry && expiry < new Date();
+        
+        // No free plan: either has paid plan or none
+        const isActive = plan && ['basic', 'pro', 'developer'].includes(plan) && expiry && expiry > new Date();
 
         // ── Get listing count ──────────────────────────────────────
         let listingsUsed = 0;
@@ -1235,67 +1236,69 @@ async function loadSubscriptionData() {
 
         // ── Define plan limits ────────────────────────────────────
         const planLimits = {
-            free: 0,
             basic: 20,
-            pro: 9999,     // Unlimited
+            pro: 9999,
             developer: 9999
         };
-        const maxListings = planLimits[plan] || 0;
+        const maxListings = plan && planLimits[plan] ? planLimits[plan] : 0;
         const isUnlimited = maxListings === 9999;
         const percentage = isUnlimited ? 50 : (maxListings > 0 ? Math.min((listingsUsed / maxListings) * 100, 100) : 0);
 
-        // ── Plan details ──────────────────────────────────────────
-        const planDisplayName = plan.charAt(0).toUpperCase() + plan.slice(1);
-        const isActive = isPaid && !isExpired;
-
-        // Update legacy elements (still used)
-        document.getElementById('currentPlan').textContent = isActive ? planDisplayName : 'No Active Subscription';
-        document.getElementById('planBadge').textContent = isActive ? planDisplayName : 'Inactive';
-        document.getElementById('planBadge').className = isActive ? 'plan-badge active' : 'plan-badge inactive';
-        document.getElementById('planStatus').textContent = isActive ? 'Active' : 'Inactive';
-        document.getElementById('planStatus').style.color = isActive ? '#4CAF50' : '#ff6b6b';
-        document.getElementById('planExpiry').textContent = isActive && expiry ? expiry.toLocaleDateString() : '—';
-        document.getElementById('listingsUsed').textContent = isActive ? listingsUsed : '—';
-
-        // ── Update new elements ──────────────────────────────────
-        // Price
-        const priceMap = {
-            basic: 'KES 2,500/mo',
-            pro: 'KES 5,000/mo',
-            developer: 'KES 10,000/mo',
-            free: '—'
+        // ── Get plan display name ─────────────────────────────────
+        const planDisplayMap = {
+            basic: 'Basic',
+            pro: 'Silver',
+            developer: 'Gold'
         };
-        document.getElementById('planPrice').textContent = isActive ? priceMap[plan] : '—';
+        const planDisplayName = plan ? planDisplayMap[plan] || plan.charAt(0).toUpperCase() + plan.slice(1) : 'No Active Plan';
 
-        // Max listings display (inside the "Used" detail item)
-        const maxListingsDisplay = document.getElementById('maxListingsDisplay');
-        if (maxListingsDisplay) {
-            if (isActive) {
-                maxListingsDisplay.textContent = isUnlimited ? '♾️' : `/ ${maxListings}`;
-            } else {
-                maxListingsDisplay.textContent = '';
-            }
-        }
-
-        // ── Progress bar ──────────────────────────────────────────
-        const progressWrapper = document.getElementById('subProgressWrapper');
-        const progressBar = document.getElementById('subProgressBar');
-        const progressUsed = document.getElementById('progressUsed');
-        const progressTotal = document.getElementById('progressTotal');
-        const progressStatus = document.getElementById('progressStatus');
+        // ── Update badge ──────────────────────────────────────────
+        const badge = document.getElementById('planBadge');
+        const dot = document.getElementById('planStatusDot');
+        const statusText = document.getElementById('planStatus');
 
         if (isActive) {
+            // ── Active subscription ──────────────────────────────
+            badge.textContent = planDisplayName;
+            badge.className = 'plan-badge active';
+            dot.className = 'plan-status-dot active';
+            statusText.textContent = 'Active';
+            statusText.style.color = '#4CAF50';
+
+            document.getElementById('currentPlan').textContent = planDisplayName;
+            document.getElementById('planExpiry').textContent = expiry ? expiry.toLocaleDateString() : '—';
+            document.getElementById('listingsUsed').textContent = listingsUsed;
+
+            // Price
+            const priceMap = {
+                basic: 'KES 2,500/mo',
+                pro: 'KES 5,000/mo',
+                developer: 'KES 10,000/mo'
+            };
+            document.getElementById('planPrice').textContent = priceMap[plan] || '—';
+
+            // Max listings display
+            const maxListingsDisplay = document.getElementById('maxListingsDisplay');
+            if (maxListingsDisplay) {
+                maxListingsDisplay.textContent = isUnlimited ? '♾️' : `/ ${maxListings}`;
+            }
+
+            // ── Progress bar ──────────────────────────────────────
+            const progressWrapper = document.getElementById('subProgressWrapper');
+            const progressBar = document.getElementById('subProgressBar');
+            const progressUsed = document.getElementById('progressUsed');
+            const progressTotal = document.getElementById('progressTotal');
+            const progressStatus = document.getElementById('progressStatus');
+
             progressWrapper.style.display = 'block';
             progressUsed.textContent = listingsUsed;
             progressTotal.textContent = isUnlimited ? '♾️' : maxListings;
             progressBar.style.width = isUnlimited ? '50%' : percentage + '%';
 
-            // Add warning/danger classes
             progressBar.classList.remove('warning', 'danger');
             if (!isUnlimited && percentage > 90) progressBar.classList.add('danger');
             else if (!isUnlimited && percentage > 70) progressBar.classList.add('warning');
 
-            // Status text
             if (isUnlimited) {
                 progressStatus.textContent = '♾️ Unlimited listings on this plan';
             } else if (percentage > 90) {
@@ -1303,15 +1306,9 @@ async function loadSubscriptionData() {
             } else {
                 progressStatus.textContent = `${Math.round(100 - percentage)}% of your slots remaining`;
             }
-        } else {
-            progressWrapper.style.display = 'none';
-        }
 
-        // ── Actions (upgrade / manage) ────────────────────────────
-        const actionsContainer = document.getElementById('planActions');
-        if (isActive) {
-            // Active plan – show management link
-            actionsContainer.innerHTML = `
+            // ── Actions ────────────────────────────────────────────
+            document.getElementById('planActions').innerHTML = `
                 <div style="text-align: right; font-size: 13px; color: var(--text-muted); padding: 8px 0;">
                     <i class="fas fa-check-circle" style="color: #4CAF50;"></i> Your plan is active
                     <a href="#" id="manageSubscriptionLink" style="color: var(--gold); margin-left: 12px; text-decoration: none;">
@@ -1321,14 +1318,32 @@ async function loadSubscriptionData() {
             `;
             document.getElementById('manageSubscriptionLink')?.addEventListener('click', (e) => {
                 e.preventDefault();
-                // Optional: open a modal or redirect to manage page
                 Utils.showToast('Manage subscription page coming soon.', 'info');
             });
+
         } else {
-            // Inactive – show upgrade message and button
-            actionsContainer.innerHTML = `
+            // ── No subscription ──────────────────────────────────
+            badge.textContent = 'No Subscription';
+            badge.className = 'plan-badge inactive';
+            dot.className = 'plan-status-dot inactive';
+            statusText.textContent = 'Inactive';
+            statusText.style.color = '#ff6b6b';
+
+            document.getElementById('currentPlan').textContent = 'No Active Subscription';
+            document.getElementById('planExpiry').textContent = '—';
+            document.getElementById('listingsUsed').textContent = '—';
+            document.getElementById('planPrice').textContent = '—';
+
+            const maxListingsDisplay = document.getElementById('maxListingsDisplay');
+            if (maxListingsDisplay) maxListingsDisplay.textContent = '';
+
+            // ── Hide progress bar ──────────────────────────────────
+            document.getElementById('subProgressWrapper').style.display = 'none';
+
+            // ── Show upgrade CTA ──────────────────────────────────
+            document.getElementById('planActions').innerHTML = `
                 <div class="upgrade-msg">
-                    <i class="fas fa-lock"></i> You need an active subscription to list properties.
+                    <i class="fas fa-lock"></i> Subscribe to start listing properties
                 </div>
                 <button class="btn-upgrade" id="upgradeBtn">
                     <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo

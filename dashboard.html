@@ -1530,6 +1530,42 @@
     font-size: 9px;
   }
 }
+
+/* ─── Plan Badge States ─── */
+.plan-badge {
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.plan-badge.active {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4CAF50;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+.plan-badge.inactive {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+/* ─── Plan Status Dot ─── */
+.plan-status-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+  vertical-align: middle;
+}
+.plan-status-dot.active {
+  background-color: #4CAF50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+}
+.plan-status-dot.inactive {
+  background-color: #ff6b6b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.3);
+}
   </style>
 </head>
 <body>
@@ -1559,14 +1595,14 @@
 
         <!-- Card Header -->
         <div class="sub-header">
-          <div class="sub-header-left">
-            <h3><i class="fas fa-crown"></i> Your Plan</h3>
-            <span class="plan-badge" id="planBadge">Free</span>
-          </div>
-          <div class="sub-header-right">
-            <span class="plan-status" id="planStatus">Inactive</span>
-          </div>
-        </div>
+  <div class="sub-header-left">
+    <h3><i class="fas fa-crown"></i> Your Plan</h3>
+    <span class="plan-badge" id="planBadge">Loading...</span>
+  </div>
+  <div class="sub-header-right">
+    <span class="plan-status-dot" id="planStatusDot"></span>
+  </div>
+</div>
 
         <!-- Card Body -->
         <div class="sub-body">
