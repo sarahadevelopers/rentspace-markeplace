@@ -1482,7 +1482,6 @@ function updateVisibilityTier(plan, isActive) {
     }
   };
 
-  // If user has no subscription or not active, treat as 'free'
   const tierKey = (isActive && plan && visibilityMap[plan]) ? plan : 'free';
   const tier = visibilityMap[tierKey] || visibilityMap.free;
 
@@ -1512,12 +1511,16 @@ function updateVisibilityTier(plan, isActive) {
   if (cta) cta.style.display = tier.showUpgrade ? 'flex' : 'none';
   if (activeMsg) activeMsg.style.display = tier.showUpgrade ? 'none' : 'block';
 
-  // Link the upgrade button
+  // ─── Link the upgrade button to openUpgradeModal() ───
   const upgradeLink = document.getElementById('visibilityUpgradeLink');
   if (upgradeLink) {
-    upgradeLink.addEventListener('click', (e) => {
+    // Remove existing listeners to prevent duplicates
+    const newLink = upgradeLink.cloneNode(true);
+    upgradeLink.parentNode.replaceChild(newLink, upgradeLink);
+    
+    newLink.addEventListener('click', (e) => {
       e.preventDefault();
-      document.getElementById('upgradeModal').style.display = 'flex';
+      openUpgradeModal();  // ← Same function as "Subscribe Now"
     });
   }
 }
