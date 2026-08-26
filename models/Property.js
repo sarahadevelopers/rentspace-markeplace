@@ -44,6 +44,7 @@ const propertySchema = new mongoose.Schema({
   bathrooms: Number,
   parking: Number,
   sqft: Number,
+  size: String,        // Added for land/plot size (e.g., "1/8 acre")
   description: {
     type: String,
     required: true
@@ -63,6 +64,22 @@ const propertySchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // ===== NEW FIELDS for availability =====
+  available_for: {
+    type: String,
+    enum: ['long_term', 'short_term', 'both', 'sale'],
+    default: 'long_term'
+  },
+  rental_type: {
+    type: String,
+    enum: ['long_term', 'short_term', 'sale'],
+    default: 'long_term'
+  },
+  // ===== Optional: flag for Airbnb (derived from listingType/propertyType) =====
+  isAirbnb: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -73,7 +90,7 @@ const propertySchema = new mongoose.Schema({
   }
 });
 
-// ─── FIXED: Pre‑save hook using async/await (no `next`) ──────
+// ─── Pre‑save hook (async/await) ──────────────
 propertySchema.pre('save', async function() {
   this.updatedAt = Date.now();
 });

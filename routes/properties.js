@@ -184,7 +184,9 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       amenities,
       propertyType,
       size,
-      status
+      status,
+      available_for,    // ★ NEW
+      rental_type       // ★ NEW
     } = req.body;
 
     if (!title || !listingType || !estate || !price || !description) {
@@ -248,7 +250,9 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       images: imageUrls,
       amenities: amenitiesArray,
       propertyType: propertyType || 'apartment',
-      status: status || 'pending'
+      status: status || 'pending',
+      available_for: available_for || '',     // ★ NEW
+      rental_type: rental_type || ''          // ★ NEW
     };
 
     console.log('📦 Property data to save:', propertyData);
@@ -323,10 +327,8 @@ router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) 
     const newImageUrls = req.files ? req.files.map(file => file.path) : [];
 
     // 3. Combine: keep existing images + append new ones
-    //    (If existingImages is empty, fallback to current property images)
     let finalImages = existingImages.length > 0 ? existingImages : property.images || [];
     if (newImageUrls.length > 0) {
-      // Append new images to the end
       finalImages = [...finalImages, ...newImageUrls];
     }
 
@@ -346,6 +348,10 @@ router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) 
     delete updateData.slug; // handled above
     delete updateData.existingImages;
     delete updateData.existingPublicIds;
+
+    // ── Ensure available_for and rental_type are included ────
+    // They are already in updateData if sent from frontend.
+    // If not sent, we keep the existing values.
 
     // ── Update the property ────────────────────────────────────
     const updatedProperty = await Property.findByIdAndUpdate(
