@@ -1434,6 +1434,92 @@ async function loadSubscriptionData() {
     } catch (error) {
         console.error('Error loading subscription data:', error);
     }
+
+    // ── Update visibility tier ──
+  updateVisibilityTier(plan, isActive);
+}
+
+// =========================
+// Visibility & Ranking
+// =========================
+function updateVisibilityTier(plan, isActive) {
+  const visibilityMap = {
+    free: {
+      label: 'Free',
+      badgeClass: 'free',
+      boost: '0%',
+      rank: 'Standard',
+      description: 'Your listings appear in the standard position in search results. Upgrade to get more visibility.',
+      barWidth: '10%',
+      showUpgrade: true
+    },
+    basic: {
+      label: 'Basic',
+      badgeClass: 'basic',
+      boost: '15%',
+      rank: 'Basic Boost',
+      description: 'Your listings get a small visibility boost. Upgrade to Silver or Gold for even more exposure.',
+      barWidth: '30%',
+      showUpgrade: true
+    },
+    pro: {
+      label: 'Popular',
+      badgeClass: 'pro',
+      boost: '50%',
+      rank: 'High Visibility',
+      description: 'Your listings are ranked high and shown with a 🔥 Popular badge!',
+      barWidth: '60%',
+      showUpgrade: true
+    },
+    developer: {
+      label: 'Premium',
+      badgeClass: 'developer',
+      boost: '100%',
+      rank: 'Top Tier',
+      description: 'Your listings appear at the very top with a 🏆 Premium badge!',
+      barWidth: '85%',
+      showUpgrade: false
+    }
+  };
+
+  // If user has no subscription or not active, treat as 'free'
+  const tierKey = (isActive && plan && visibilityMap[plan]) ? plan : 'free';
+  const tier = visibilityMap[tierKey] || visibilityMap.free;
+
+  // Update badge
+  const badge = document.getElementById('visibilityBadge');
+  if (badge) {
+    badge.textContent = tier.label;
+    badge.className = `visibility-badge ${tier.badgeClass}`;
+  }
+
+  // Update description
+  const desc = document.getElementById('visibilityDescription');
+  if (desc) desc.innerHTML = tier.description;
+
+  // Update bar
+  const bar = document.getElementById('tierBar');
+  if (bar) bar.style.width = tier.barWidth;
+
+  // Update benefits
+  document.getElementById('boostPercent').textContent = tier.boost;
+  document.getElementById('visibilityBadgeLabel').textContent = tier.label;
+  document.getElementById('visibilityRank').textContent = tier.rank;
+
+  // Show/hide upgrade CTA
+  const cta = document.getElementById('visibilityUpgradeCta');
+  const activeMsg = document.getElementById('visibilityActive');
+  if (cta) cta.style.display = tier.showUpgrade ? 'flex' : 'none';
+  if (activeMsg) activeMsg.style.display = tier.showUpgrade ? 'none' : 'block';
+
+  // Link the upgrade button
+  const upgradeLink = document.getElementById('visibilityUpgradeLink');
+  if (upgradeLink) {
+    upgradeLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('upgradeModal').style.display = 'flex';
+    });
+  }
 }
 // =========================
 // Compute availability fields

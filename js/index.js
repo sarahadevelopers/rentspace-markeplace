@@ -133,8 +133,8 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
             }
         }
 
-        // Shuffle for variety
-        properties = shuffleArray(properties);
+        // ⭐ SERVER ALREADY SORTS BY: featured → subscription plan → createdAt
+        // We keep the order as-is; no shuffle needed.
 
         if (properties.length === 0) {
             container.innerHTML = `
@@ -147,13 +147,37 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
         }
 
         container.innerHTML = properties.map(prop => {
+            // ─── Determine the badge ──────────────────────────────
             let badge = '';
-            if (prop.featured) badge = 'Featured';
-            else if (prop.listingType === 'rent') badge = 'For Rent';
-            else if (prop.listingType === 'sale') {
-                if (prop.propertyType?.includes('land')) badge = 'Land';
-                else badge = 'For Sale';
-            } else if (prop.propertyType === 'airbnb' || prop.listingType === 'airbnb') badge = 'Short Stay';
+            let badgeClass = '';
+
+            if (prop.featured) {
+                badge = '⭐ Featured';
+                badgeClass = 'featured';
+            } else if (prop.ownerSubscriptionPlan === 'developer') {
+                badge = '🏆 Premium';
+                badgeClass = 'premium';
+            } else if (prop.ownerSubscriptionPlan === 'pro') {
+                badge = '🔥 Popular';
+                badgeClass = 'popular';
+            } else if (prop.ownerSubscriptionPlan === 'basic') {
+                badge = '📌 Listed';
+                badgeClass = 'basic';
+            } else if (prop.listingType === 'rent') {
+                badge = 'For Rent';
+                badgeClass = 'rent';
+            } else if (prop.listingType === 'sale') {
+                if (prop.propertyType?.includes('land')) {
+                    badge = 'Land';
+                    badgeClass = 'land';
+                } else {
+                    badge = 'For Sale';
+                    badgeClass = 'sale';
+                }
+            } else if (prop.propertyType === 'airbnb' || prop.listingType === 'airbnb') {
+                badge = 'Short Stay';
+                badgeClass = 'airbnb';
+            }
 
             const formattedPrice = prop.price ? prop.price.toLocaleString() : '0';
 
@@ -169,7 +193,7 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
                 <a href="${basePath}/${folder}/${prop.slug}.html" class="property-card">
                     <div class="card-image">
                         <img src="${prop.images?.[0] || `${basePath}/images/placeholder.jpg`}" alt="${escapeHtml(prop.title)}" loading="lazy" onerror="this.src='${basePath}/images/placeholder.jpg'">
-                        ${badge ? `<span class="card-badge">${badge}</span>` : ''}
+                        ${badge ? `<span class="card-badge ${badgeClass}">${badge}</span>` : ''}
                         <span class="card-price">KES ${formattedPrice}</span>
                     </div>
                     <div class="card-body">

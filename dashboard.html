@@ -1566,6 +1566,179 @@
   background-color: #ff6b6b;
   box-shadow: 0 0 8px rgba(255, 107, 107, 0.3);
 }
+
+/* ===== VISIBILITY TIER ===== */
+.visibility-section {
+  margin-bottom: 32px;
+}
+.visibility-card {
+  background: var(--dark-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.visibility-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+}
+.visibility-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.visibility-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--white);
+  margin: 0;
+}
+.visibility-header h3 i {
+  color: var(--gold);
+  margin-right: 8px;
+}
+.visibility-badge {
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.visibility-badge.free { background: rgba(108,117,125,0.15); color: #adb5bd; border: 1px solid rgba(108,117,125,0.2); }
+.visibility-badge.basic { background: rgba(197,160,89,0.15); color: var(--gold); border: 1px solid rgba(197,160,89,0.2); }
+.visibility-badge.pro { background: rgba(176,176,176,0.15); color: #c0c0c0; border: 1px solid rgba(176,176,176,0.2); }
+.visibility-badge.developer { background: rgba(212,168,67,0.15); color: #d4a843; border: 1px solid rgba(212,168,67,0.2); }
+.visibility-badge.featured { background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid rgba(255,215,0,0.2); }
+
+.visibility-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.visibility-tier {
+  flex: 2;
+  min-width: 200px;
+}
+.tier-indicator {
+  margin: 12px 0 8px;
+  position: relative;
+}
+.tier-bar {
+  height: 6px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #666, var(--gold), var(--gold-light), #FFD700);
+  transition: width 0.8s ease;
+  width: 0%;
+}
+.tier-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.tier-labels span {
+  flex: 1;
+  text-align: center;
+}
+.visibility-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.visibility-benefits {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.benefit-item i {
+  color: var(--gold);
+  width: 18px;
+  text-align: center;
+}
+.benefit-item strong {
+  color: var(--white);
+}
+
+.visibility-upgrade-cta {
+  width: 100%;
+  background: rgba(197,160,89,0.08);
+  border: 1px dashed var(--gold);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.visibility-upgrade-cta p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.visibility-upgrade-cta p i {
+  color: var(--gold);
+}
+.btn-upgrade-sm {
+  background: var(--gold);
+  color: #0a0a0a;
+  padding: 8px 20px;
+  border-radius: 30px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition);
+}
+.btn-upgrade-sm:hover {
+  background: var(--gold-light);
+  transform: translateY(-2px);
+}
+
+.visibility-active {
+  width: 100%;
+  background: rgba(76,175,80,0.1);
+  border: 1px solid rgba(76,175,80,0.2);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-top: 12px;
+  color: #4CAF50;
+}
+.visibility-active i {
+  margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+  .visibility-card { padding: 18px 16px; }
+  .visibility-body { flex-direction: column; }
+  .visibility-upgrade-cta { flex-direction: column; text-align: center; }
+  .tier-labels { font-size: 7px; }
+}
   </style>
 </head>
 <body>
@@ -1905,7 +2078,53 @@
       </div>
       <div id="paginationControls" style="display:flex; justify-content:center; gap:8px; margin-top:20px; flex-wrap:wrap;"></div>
     </div>
-
+ <!-- ===== VISIBILITY TIER SECTION ===== -->
+<section class="visibility-section">
+  <div class="visibility-card">
+    <div class="visibility-header">
+      <h3><i class="fas fa-rocket"></i> Your Visibility & Ranking</h3>
+      <span class="visibility-badge" id="visibilityBadge">Basic</span>
+    </div>
+    <div class="visibility-body">
+      <div class="visibility-tier">
+        <div class="tier-indicator">
+          <div class="tier-bar" id="tierBar" style="width: 25%;"></div>
+          <div class="tier-labels">
+            <span>Free</span>
+            <span>Basic</span>
+            <span>Popular</span>
+            <span>Premium</span>
+            <span>Featured</span>
+          </div>
+        </div>
+        <p class="visibility-description" id="visibilityDescription">
+          Your listings appear at the <strong>standard position</strong> in search results.
+        </p>
+      </div>
+      <div class="visibility-benefits">
+        <div class="benefit-item">
+          <i class="fas fa-arrow-up"></i>
+          <span><strong id="boostPercent">0%</strong> visibility boost</span>
+        </div>
+        <div class="benefit-item">
+          <i class="fas fa-badge"></i>
+          <span>Badge: <strong id="visibilityBadgeLabel">None</strong></span>
+        </div>
+        <div class="benefit-item">
+          <i class="fas fa-ranking-star"></i>
+          <span>Rank: <strong id="visibilityRank">Standard</strong></span>
+        </div>
+      </div>
+      <div class="visibility-upgrade-cta" id="visibilityUpgradeCta">
+        <p>🚀 Upgrade your plan to boost your listings to the top!</p>
+        <a href="#" id="visibilityUpgradeLink" class="btn-upgrade-sm">See Plans</a>
+      </div>
+      <div class="visibility-active" id="visibilityActive" style="display:none;">
+        <p>✅ Your listings are currently <strong>boosted</strong>!</p>
+      </div>
+    </div>
+  </div>
+</section>
   </main>
 
   <!-- ===== IMAGE MODAL ===== -->

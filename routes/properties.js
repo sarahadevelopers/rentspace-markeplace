@@ -49,7 +49,11 @@ async function generateUniqueSlug(title, existingId = null) {
   return slug;
 }
 
-// ─── GET /api/properties (public, with filters & pagination) ──
+// ─── GET /api/properties (public, with ranking) ────────────────
+// Properties are ranked by:
+//   1. featured (manual override)
+//   2. owner subscription plan (developer > pro > basic > free)
+//   3. creation date (newest first)
 router.get('/', async (req, res) => {
   try {
     const {
@@ -82,12 +86,31 @@ router.get('/', async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
+    // ── Aggregation pipeline for ranking ────────────────────────
+    const pipeline = [
+      { $match: query },
+      {
+        $addFields: {
+          priority: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$ownerSubscriptionPlan', 'developer'] }, then: 4 },
+                { case: { $eq: ['$ownerSubscriptionPlan', 'pro'] }, then: 3 },
+                { case: { $eq: ['$ownerSubscriptionPlan', 'basic'] }, then: 2 },
+                { case: { $eq: ['$ownerSubscriptionPlan', 'free'] }, then: 1 }
+              ],
+              default: 0
+            }
+          }
+        }
+      },
+      { $sort: { featured: -1, priority: -1, createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limitNum }
+    ];
+
     const [properties, total] = await Promise.all([
-      Property.find(query)
-        .skip(skip)
-        .limit(limitNum)
-        .sort({ featured: -1, createdAt: -1 })
-        .lean(),
+      Property.aggregate(pipeline),
       Property.countDocuments(query)
     ]);
 
@@ -185,8 +208,8 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       propertyType,
       size,
       status,
-      available_for,    // ★ NEW
-      rental_type       // ★ NEW
+      available_for,
+      rental_type
     } = req.body;
 
     if (!title || !listingType || !estate || !price || !description) {
@@ -233,7 +256,7 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       }
     }
 
-    // ── 6. Build property object ──────────────────────────────────
+    // ── 6. Build property object (including owner's plan) ────────
     const propertyData = {
       ownerId: req.user._id,
       title,
@@ -251,8 +274,10 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       amenities: amenitiesArray,
       propertyType: propertyType || 'apartment',
       status: status || 'pending',
-      available_for: available_for || '',     // ★ NEW
-      rental_type: rental_type || ''          // ★ NEW
+      available_for: available_for || '',
+      rental_type: rental_type || '',
+      // ⭐ NEW: Store the owner's subscription plan for ranking
+      ownerSubscriptionPlan: req.user.subscriptionPlan || 'free'
     };
 
     console.log('📦 Property data to save:', propertyData);
@@ -349,9 +374,10 @@ router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) 
     delete updateData.existingImages;
     delete updateData.existingPublicIds;
 
-    // ── Ensure available_for and rental_type are included ────
-    // They are already in updateData if sent from frontend.
-    // If not sent, we keep the existing values.
+    // ── Optionally update ownerSubscriptionPlan if user plan changed ──
+    // We keep the plan at creation time; if you want dynamic, use join.
+    // If you want to update it on edit, uncomment:
+    // updateData.ownerSubscriptionPlan = req.user.subscriptionPlan || 'free';
 
     // ── Update the property ────────────────────────────────────
     const updatedProperty = await Property.findByIdAndUpdate(

@@ -1,11 +1,14 @@
 const mongoose = require('mongoose');
 
 const propertySchema = new mongoose.Schema({
+  // ─── Owner ──────────────────────────────────────────────────
   ownerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
+
+  // ─── Basic Info ─────────────────────────────────────────────
   title: {
     type: String,
     required: [true, 'Please add a title'],
@@ -27,6 +30,8 @@ const propertySchema = new mongoose.Schema({
     type: String,
     default: 'apartment'
   },
+
+  // ─── Location ───────────────────────────────────────────────
   estate: {
     type: String,
     required: true
@@ -35,22 +40,28 @@ const propertySchema = new mongoose.Schema({
     type: String,
     default: 'Nairobi'
   },
+
+  // ─── Pricing & Specs ────────────────────────────────────────
   price: {
     type: Number,
     required: true
   },
-  priceNight: Number, // for short‑stay
+  priceNight: Number,                // for short‑stay
   bedrooms: Number,
   bathrooms: Number,
   parking: Number,
   sqft: Number,
-  size: String,        // Added for land/plot size (e.g., "1/8 acre")
+  size: String,                      // e.g., "1/8 acre"
+
+  // ─── Description & Media ──────────────────────────────────
   description: {
     type: String,
     required: true
   },
   images: [String],
   amenities: [String],
+
+  // ─── Status & Metadata ────────────────────────────────────
   status: {
     type: String,
     enum: ['draft', 'pending', 'approved', 'rejected', 'published', 'rented', 'expired', 'archived'],
@@ -64,7 +75,8 @@ const propertySchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  // ===== NEW FIELDS for availability =====
+
+  // ─── Availability (for filtering) ──────────────────────────
   available_for: {
     type: String,
     enum: ['long_term', 'short_term', 'both', 'sale'],
@@ -75,11 +87,19 @@ const propertySchema = new mongoose.Schema({
     enum: ['long_term', 'short_term', 'sale'],
     default: 'long_term'
   },
-  // ===== Optional: flag for Airbnb (derived from listingType/propertyType) =====
   isAirbnb: {
     type: Boolean,
     default: false
   },
+
+  // ⭐ NEW: Subscription plan of the owner (for ranking)
+  ownerSubscriptionPlan: {
+    type: String,
+    enum: ['free', 'basic', 'pro', 'developer'],
+    default: 'free'
+  },
+
+  // ─── Timestamps ─────────────────────────────────────────────
   createdAt: {
     type: Date,
     default: Date.now
@@ -90,7 +110,12 @@ const propertySchema = new mongoose.Schema({
   }
 });
 
-// ─── Pre‑save hook (async/await) ──────────────
+// ─── Index for efficient ranking sorting ──────────────────────
+//   Sorts: featured first, then by subscription priority,
+//   then by creation date (newest first).
+propertySchema.index({ featured: -1, ownerSubscriptionPlan: 1, createdAt: -1 });
+
+// ─── Pre‑save hook ─────────────────────────────────────────────
 propertySchema.pre('save', async function() {
   this.updatedAt = Date.now();
 });
