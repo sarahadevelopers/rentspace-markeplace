@@ -1498,6 +1498,38 @@
     grid-template-columns: 1fr;
   }
 }
+/* Plan Details Grid */
+.plan-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);  /* 4 columns on desktop */
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* Tablet & Mobile: 2 columns */
+@media (max-width: 992px) {
+  .plan-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* Small phones: 2 columns (keep it) */
+@media (max-width: 480px) {
+  .plan-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .plan-detail-item {
+    padding: 10px 12px;
+  }
+  .plan-detail-item .detail-value {
+    font-size: 13px;
+  }
+  .plan-detail-item .detail-label {
+    font-size: 9px;
+  }
+}
   </style>
 </head>
 <body>
