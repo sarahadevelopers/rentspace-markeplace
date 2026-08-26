@@ -27,6 +27,457 @@ let filterStatus = 'all';
 let filterType = 'all';
 let filterEstate = 'all';
 
+
+// =========================
+// Properties Table
+// =========================
+const PropertiesTable = {
+  currentPage: 1,
+  itemsPerPage: 10,
+  sortField: 'createdAt',    // default sort
+  sortDirection: 'desc',     // 'asc' or 'desc'
+
+  // ── Get filtered + sorted properties ──
+  getFilteredAndSortedProperties() {
+    // 1. Start with all properties
+    let filtered = [...allProperties];
+
+    // 2. Apply filters (from global filter variables)
+    if (filterStatus && filterStatus !== 'all') {
+      filtered = filtered.filter(p => p.status === filterStatus);
+    }
+    if (filterType && filterType !== 'all') {
+      filtered = filtered.filter(p => p.propertyType === filterType);
+    }
+    if (filterEstate && filterEstate !== 'all') {
+      filtered = filtered.filter(p => p.estate === filterEstate);
+    }
+
+    // 3. Apply sorting
+    const field = this.sortField;
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    filtered.sort((a, b) => {
+      let valA = a[field] ?? '';
+      let valB = b[field] ?? '';
+      if (field === 'price') {
+        valA = Number(valA);
+        valB = Number(valB);
+      } else if (field === 'title' || field === 'estate' || field === 'propertyType') {
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+      } else if (field === 'createdAt') {
+        valA = new Date(valA).getTime();
+        valB = new Date(valB).getTime();
+      }
+      if (valA < valB) return -1 * dir;
+      if (valA > valB) return 1 * dir;
+      return 0;
+    });
+
+    return filtered;
+  },
+
+  // ── Render the table with current filters + sorting ──
+  render(properties) {
+    allProperties = properties;
+    this.currentPage = 1;
+    // Reset sort to default
+    this.sortField = 'createdAt';
+    this.sortDirection = 'desc';
+    this.renderPage();
+    this.renderPagination();
+    if (propertyCountDisplay) propertyCountDisplay.textContent = properties.length;
+  },
+
+  renderPage() {
+    if (!propertiesTable) return;
+
+    // Get filtered + sorted data
+    const displayProperties = this.getFilteredAndSortedProperties();
+
+    const start = (this.currentPage - 1) * this.itemsPerPage;
+    const pageProperties = displayProperties.slice(start, start + this.itemsPerPage);
+
+    if (!displayProperties.length) {
+      propertiesTable.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center" style="padding:40px;">
+            <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
+            <p style="color:var(--text-light);">No properties match your current filters</p>
+            <button class="btn btn-outline" id="clearFiltersFromEmpty" style="margin-top:12px;">
+              <i class="fas fa-times"></i> Clear Filters
+            </button>
+          </td>
+        </tr>
+      `;
+      document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
+      return;
+    }
+
+    // Build table rows
+    propertiesTable.innerHTML = '';
+    pageProperties.forEach(property => {
+      const tr = document.createElement('tr');
+      const thumbSrc = property.images && property.images[0]
+        ? property.images[0]
+        : 'https://via.placeholder.com/44x34?text=No+Img';
+      let listingDisplay = (property.listingType || '').toUpperCase();
+      if (property.isAirbnb) listingDisplay = 'AIRBNB';
+
+      tr.innerHTML = `
+        <td><strong>${this.escapeHtml(property.title)}</strong></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
+                 data-property-id="${property._id}" class="thumbnail-clickable">
+            <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
+          </div>
+        </td>
+        <td>${this.escapeHtml(property.estate || '')}</td>
+        <td>${this.escapeHtml(property.propertyType || '')}</td>
+        <td>${listingDisplay}</td>
+        <td>${Utils.formatPrice(property.price)}</td>
+        <td><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
+        <td class="actions">
+          <button class="btn btn-outline edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
+          <button class="btn btn-danger delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
+        </td>
+      `;
+      propertiesTable.appendChild(tr);
+    });
+
+    // Update result count (outside the table)
+    const resultSpan = document.getElementById('filterResultCount');
+    if (resultSpan) {
+      const hasFilters = (filterStatus !== 'all' || filterType !== 'all' || filterEstate !== 'all');
+      if (hasFilters) {
+        resultSpan.innerHTML = `Showing <span>${displayProperties.length}</span> of ${allProperties.length} properties`;
+      } else {
+        resultSpan.innerHTML = `Showing <span>${displayProperties.length}</span> properties`;
+      }
+    }
+
+    this.attachEventListeners();
+
+    // ── Attach sort handlers to table headers ──
+    this.attachSortHandlers();
+  },
+
+  // ── Render pagination using filtered data ──
+  renderPagination() {
+    if (!paginationControls) return;
+    const displayProperties = this.getFilteredAndSortedProperties();
+    const totalPages = Math.ceil(displayProperties.length / this.itemsPerPage);
+
+    if (totalPages <= 1) {
+      paginationControls.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    if (this.currentPage > 1) {
+      html += `<button class="pagination-btn" data-page="${this.currentPage - 1}">Prev</button>`;
+    }
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === this.currentPage) {
+        html += `<button class="pagination-btn active" data-page="${i}">${i}</button>`;
+      } else if (Math.abs(i - this.currentPage) <= 2 || i === 1 || i === totalPages) {
+        html += `<button class="pagination-btn" data-page="${i}">${i}</button>`;
+      } else if (Math.abs(i - this.currentPage) === 3) {
+        html += `<span style="margin:0 4px;">...</span>`;
+      }
+    }
+    if (this.currentPage < totalPages) {
+      html += `<button class="pagination-btn" data-page="${this.currentPage + 1}">Next</button>`;
+    }
+
+    paginationControls.innerHTML = html;
+    paginationControls.querySelectorAll('.pagination-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const page = parseInt(btn.dataset.page);
+        if (!isNaN(page)) {
+          this.currentPage = page;
+          this.renderPage();
+          this.renderPagination();
+        }
+      });
+    });
+  },
+
+  // ── Attach sort handlers to column headers ──
+  attachSortHandlers() {
+    const sortableFields = [
+      { id: 'title', label: 'Title' },
+      { id: 'estate', label: 'Estate' },
+      { id: 'propertyType', label: 'Type' },
+      { id: 'price', label: 'Price' },
+      { id: 'status', label: 'Status' },
+      { id: 'createdAt', label: 'Date' }
+    ];
+
+    // Find the table header row
+    const thead = document.querySelector('#propertiesTable thead');
+    if (!thead) return;
+
+    // Remove existing sort indicators
+    thead.querySelectorAll('th').forEach(th => {
+      th.style.cursor = 'pointer';
+      th.title = 'Click to sort';
+      // Remove old click listeners (we'll re-bind)
+      const newTh = th.cloneNode(true);
+      th.parentNode.replaceChild(newTh, th);
+    });
+
+    // Add click listeners to each sortable column
+    const headers = thead.querySelectorAll('th');
+    headers.forEach((th, index) => {
+      const field = sortableFields[index]?.id;
+      if (!field) return;
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        // Toggle direction if same field, else set to asc
+        if (this.sortField === field) {
+          this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          this.sortField = field;
+          this.sortDirection = 'asc';
+        }
+        this.currentPage = 1; // reset to first page
+        this.renderPage();
+        this.renderPagination();
+      });
+
+      // Show current sort indicator
+      if (this.sortField === field) {
+        const arrow = this.sortDirection === 'asc' ? ' ▲' : ' ▼';
+        th.textContent = th.textContent.replace(/[ ▲▼]/g, '') + arrow;
+      }
+    });
+  },
+
+  // ── Other helper methods ──
+  escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  },
+
+  attachEventListeners() {
+    // Edit buttons
+    propertiesTable.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        try {
+          const property = await PropertyAPI.getPropertyById(id);
+          FormManager.populateForEdit(property);
+        } catch (error) {
+          Utils.showToast('Failed to load property', 'error');
+        }
+      });
+    });
+
+    // Delete buttons
+    propertiesTable.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        if (!confirm('Delete this property permanently?')) return;
+        try {
+          await PropertyAPI.deleteProperty(id);
+          Utils.showToast('Property deleted');
+          await PropertiesTable.loadAndRender();
+          if (currentEditId === id) FormManager.reset();
+        } catch (error) {
+          Utils.showToast('Failed to delete', 'error');
+        }
+      });
+    });
+
+    // Thumbnail click -> open image modal
+    propertiesTable.querySelectorAll('.thumbnail-clickable').forEach(thumb => {
+      thumb.addEventListener('click', () => {
+        const id = thumb.dataset.propertyId;
+        const property = allProperties.find(p => p._id === id);
+        if (property && property.images && property.images.length) {
+          ImageModal.open(property.images);
+        }
+      });
+    });
+  },
+
+  async loadAndRender() {
+    this.showLoading();
+    try {
+      const properties = await PropertyAPI.fetchMyProperties();
+      this.render(properties);
+    } catch (error) {
+      this.showError(error.message);
+    }
+  },
+
+  showLoading() {
+    if (!propertiesTable) return;
+    propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
+    if (paginationControls) paginationControls.innerHTML = '';
+  },
+
+  showError(error) {
+    if (!propertiesTable) return;
+    propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;color:red;padding:40px;">Error: ${error}</td></tr>`;
+    if (paginationControls) paginationControls.innerHTML = '';
+  }
+};
+
+function getFilteredProperties() {
+  let filtered = [...allProperties];
+  let filterCount = 0;
+
+  // ── Filter by Status ──
+  if (filterStatus !== 'all') {
+    filtered = filtered.filter(p => p.status === filterStatus);
+    filterCount++;
+  }
+
+  // ── Filter by Property Type ──
+  if (filterType !== 'all') {
+    filtered = filtered.filter(p => p.propertyType === filterType);
+    filterCount++;
+  }
+
+  // ── Filter by Estate ──
+  if (filterEstate !== 'all') {
+    filtered = filtered.filter(p => p.estate === filterEstate);
+    filterCount++;
+  }
+
+  return {
+    properties: filtered,
+    count: filtered.length,
+    hasFilters: filterCount > 0
+  };
+}
+
+function applyFilters() {
+  // Get filtered properties from the FULL list
+  const filtered = allProperties.filter(p => {
+    let match = true;
+    
+    // Filter by Status
+    if (filterStatus !== 'all') {
+      if (p.status !== filterStatus) match = false;
+    }
+    
+    // Filter by Property Type
+    if (filterType !== 'all') {
+      if (p.propertyType !== filterType) match = false;
+    }
+    
+    // Filter by Estate
+    if (filterEstate !== 'all') {
+      if (p.estate !== filterEstate) match = false;
+    }
+    
+    return match;
+  });
+
+  // Update the result count
+  const resultSpan = document.getElementById('filterResultCount');
+  const hasFilters = (filterStatus !== 'all' || filterType !== 'all' || filterEstate !== 'all');
+  
+  if (resultSpan) {
+    if (hasFilters) {
+      resultSpan.innerHTML = `Showing <span>${filtered.length}</span> of ${allProperties.length} properties`;
+    } else {
+      resultSpan.innerHTML = `Showing <span>${filtered.length}</span> properties`;
+    }
+  }
+
+  // If no properties match, show empty state
+  if (filtered.length === 0) {
+    propertiesTable.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center" style="padding:40px;">
+          <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
+          <p style="color:var(--text-light);">No properties match your filters</p>
+          <button class="btn btn-outline" id="clearFiltersFromEmpty" style="margin-top:12px;">
+            <i class="fas fa-times"></i> Clear Filters
+          </button>
+        </td>
+      </tr>
+    `;
+    document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
+    // Hide pagination
+    if (paginationControls) paginationControls.innerHTML = '';
+    return;
+  }
+
+  // ✅ CORRECT: Use the filtered list directly, not via allProperties
+  const currentPage = PropertiesTable.currentPage || 1;
+  const itemsPerPage = PropertiesTable.itemsPerPage || 10;
+  const start = (currentPage - 1) * itemsPerPage;
+  const paginated = filtered.slice(start, start + itemsPerPage);
+  
+  // Store filtered data temporarily for pagination
+  PropertiesTable._filteredData = filtered;
+  
+  // Render the paginated rows
+  PropertiesTable.renderPageWithData(paginated, filtered.length);
+  PropertiesTable.renderPaginationWithData(filtered.length);
+}
+
+// =========================
+// Clear Filters
+// =========================
+function clearFilters() {
+  document.getElementById('filterStatus').value = 'all';
+  document.getElementById('filterType').value = 'all';
+  document.getElementById('filterEstate').value = 'all';
+  filterStatus = 'all';
+  filterType = 'all';
+  filterEstate = 'all';
+  applyFilters();
+}
+
+// =========================
+// Filter Change Handlers
+// =========================
+function initFilters() {
+  const statusSelect = document.getElementById('filterStatus');
+  const typeSelect = document.getElementById('filterType');
+  const estateSelect = document.getElementById('filterEstate');
+  const clearBtn = document.getElementById('clearFiltersBtn');
+
+  if (statusSelect) {
+    statusSelect.addEventListener('change', function() {
+      filterStatus = this.value;
+      PropertiesTable.currentPage = 1; // Reset to first page
+      applyFilters();
+    });
+  }
+
+  if (typeSelect) {
+    typeSelect.addEventListener('change', function() {
+      filterType = this.value;
+      PropertiesTable.currentPage = 1;
+      applyFilters();
+    });
+  }
+
+  if (estateSelect) {
+    estateSelect.addEventListener('change', function() {
+      filterEstate = this.value;
+      PropertiesTable.currentPage = 1;
+      applyFilters();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearFilters);
+  }
+}
 // =========================
 // API Configuration
 // =========================
@@ -145,105 +596,12 @@ const propertyCountDisplay = document.getElementById('propertyCountDisplay');
 const paginationControls = document.getElementById('paginationControls');
 
 
-function getFilteredProperties() {
-  let filtered = [...allProperties];
-  let filterCount = 0;
 
-  // ── Filter by Status ──
-  if (filterStatus !== 'all') {
-    filtered = filtered.filter(p => p.status === filterStatus);
-    filterCount++;
-  }
-
-  // ── Filter by Property Type ──
-  if (filterType !== 'all') {
-    filtered = filtered.filter(p => p.propertyType === filterType);
-    filterCount++;
-  }
-
-  // ── Filter by Estate ──
-  if (filterEstate !== 'all') {
-    filtered = filtered.filter(p => p.estate === filterEstate);
-    filterCount++;
-  }
-
-  return {
-    properties: filtered,
-    count: filtered.length,
-    hasFilters: filterCount > 0
-  };
-}
 
 // =========================
 // Apply Filters (FIXED)
 // =========================
-function applyFilters() {
-  // Get filtered properties from the FULL list
-  const filtered = allProperties.filter(p => {
-    let match = true;
-    
-    // Filter by Status
-    if (filterStatus !== 'all') {
-      if (p.status !== filterStatus) match = false;
-    }
-    
-    // Filter by Property Type
-    if (filterType !== 'all') {
-      if (p.propertyType !== filterType) match = false;
-    }
-    
-    // Filter by Estate
-    if (filterEstate !== 'all') {
-      if (p.estate !== filterEstate) match = false;
-    }
-    
-    return match;
-  });
 
-  // Update the result count
-  const resultSpan = document.getElementById('filterResultCount');
-  const hasFilters = (filterStatus !== 'all' || filterType !== 'all' || filterEstate !== 'all');
-  
-  if (resultSpan) {
-    if (hasFilters) {
-      resultSpan.innerHTML = `Showing <span>${filtered.length}</span> of ${allProperties.length} properties`;
-    } else {
-      resultSpan.innerHTML = `Showing <span>${filtered.length}</span> properties`;
-    }
-  }
-
-  // If no properties match, show empty state
-  if (filtered.length === 0) {
-    propertiesTable.innerHTML = `
-      <tr>
-        <td colspan="8" class="text-center" style="padding:40px;">
-          <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
-          <p style="color:var(--text-light);">No properties match your filters</p>
-          <button class="btn btn-outline" id="clearFiltersFromEmpty" style="margin-top:12px;">
-            <i class="fas fa-times"></i> Clear Filters
-          </button>
-        </td>
-      </tr>
-    `;
-    document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
-    // Hide pagination
-    if (paginationControls) paginationControls.innerHTML = '';
-    return;
-  }
-
-  // ✅ CORRECT: Use the filtered list directly, not via allProperties
-  const currentPage = PropertiesTable.currentPage || 1;
-  const itemsPerPage = PropertiesTable.itemsPerPage || 10;
-  const start = (currentPage - 1) * itemsPerPage;
-  const paginated = filtered.slice(start, start + itemsPerPage);
-  
-  // Store filtered data temporarily for pagination
-  PropertiesTable._filteredData = filtered;
-  
-  // Render the paginated rows
-  PropertiesTable.renderPageWithData(paginated, filtered.length);
-  PropertiesTable.renderPaginationWithData(filtered.length);
-}
 
 // =========================
 // Override renderPage to use passed data
@@ -341,56 +699,9 @@ PropertiesTable.renderPaginationWithData = function(totalCount) {
   });
 };
 
-// =========================
-// Clear Filters
-// =========================
-function clearFilters() {
-  document.getElementById('filterStatus').value = 'all';
-  document.getElementById('filterType').value = 'all';
-  document.getElementById('filterEstate').value = 'all';
-  filterStatus = 'all';
-  filterType = 'all';
-  filterEstate = 'all';
-  applyFilters();
-}
 
-// =========================
-// Filter Change Handlers
-// =========================
-function initFilters() {
-  const statusSelect = document.getElementById('filterStatus');
-  const typeSelect = document.getElementById('filterType');
-  const estateSelect = document.getElementById('filterEstate');
-  const clearBtn = document.getElementById('clearFiltersBtn');
 
-  if (statusSelect) {
-    statusSelect.addEventListener('change', function() {
-      filterStatus = this.value;
-      PropertiesTable.currentPage = 1; // Reset to first page
-      applyFilters();
-    });
-  }
 
-  if (typeSelect) {
-    typeSelect.addEventListener('change', function() {
-      filterType = this.value;
-      PropertiesTable.currentPage = 1;
-      applyFilters();
-    });
-  }
-
-  if (estateSelect) {
-    estateSelect.addEventListener('change', function() {
-      filterEstate = this.value;
-      PropertiesTable.currentPage = 1;
-      applyFilters();
-    });
-  }
-
-  if (clearBtn) {
-    clearBtn.addEventListener('click', clearFilters);
-  }
-}
 // =========================
 // Dynamic Price Label / Hint
 // =========================
@@ -819,308 +1130,7 @@ const PropertyAPI = {
     }
 };
 
-// =========================
-// Properties Table
-// =========================
-const PropertiesTable = {
-  currentPage: 1,
-  itemsPerPage: 10,
-  sortField: 'createdAt',    // default sort
-  sortDirection: 'desc',     // 'asc' or 'desc'
 
-  // ── Get filtered + sorted properties ──
-  getFilteredAndSortedProperties() {
-    // 1. Start with all properties
-    let filtered = [...allProperties];
-
-    // 2. Apply filters (from global filter variables)
-    if (filterStatus && filterStatus !== 'all') {
-      filtered = filtered.filter(p => p.status === filterStatus);
-    }
-    if (filterType && filterType !== 'all') {
-      filtered = filtered.filter(p => p.propertyType === filterType);
-    }
-    if (filterEstate && filterEstate !== 'all') {
-      filtered = filtered.filter(p => p.estate === filterEstate);
-    }
-
-    // 3. Apply sorting
-    const field = this.sortField;
-    const dir = this.sortDirection === 'asc' ? 1 : -1;
-    filtered.sort((a, b) => {
-      let valA = a[field] ?? '';
-      let valB = b[field] ?? '';
-      if (field === 'price') {
-        valA = Number(valA);
-        valB = Number(valB);
-      } else if (field === 'title' || field === 'estate' || field === 'propertyType') {
-        valA = String(valA).toLowerCase();
-        valB = String(valB).toLowerCase();
-      } else if (field === 'createdAt') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      }
-      if (valA < valB) return -1 * dir;
-      if (valA > valB) return 1 * dir;
-      return 0;
-    });
-
-    return filtered;
-  },
-
-  // ── Render the table with current filters + sorting ──
-  render(properties) {
-    allProperties = properties;
-    this.currentPage = 1;
-    // Reset sort to default
-    this.sortField = 'createdAt';
-    this.sortDirection = 'desc';
-    this.renderPage();
-    this.renderPagination();
-    if (propertyCountDisplay) propertyCountDisplay.textContent = properties.length;
-  },
-
-  renderPage() {
-    if (!propertiesTable) return;
-
-    // Get filtered + sorted data
-    const displayProperties = this.getFilteredAndSortedProperties();
-
-    const start = (this.currentPage - 1) * this.itemsPerPage;
-    const pageProperties = displayProperties.slice(start, start + this.itemsPerPage);
-
-    if (!displayProperties.length) {
-      propertiesTable.innerHTML = `
-        <tr>
-          <td colspan="8" class="text-center" style="padding:40px;">
-            <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
-            <p style="color:var(--text-light);">No properties match your current filters</p>
-            <button class="btn btn-outline" id="clearFiltersFromEmpty" style="margin-top:12px;">
-              <i class="fas fa-times"></i> Clear Filters
-            </button>
-          </td>
-        </tr>
-      `;
-      document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
-      return;
-    }
-
-    // Build table rows
-    propertiesTable.innerHTML = '';
-    pageProperties.forEach(property => {
-      const tr = document.createElement('tr');
-      const thumbSrc = property.images && property.images[0]
-        ? property.images[0]
-        : 'https://via.placeholder.com/44x34?text=No+Img';
-      let listingDisplay = (property.listingType || '').toUpperCase();
-      if (property.isAirbnb) listingDisplay = 'AIRBNB';
-
-      tr.innerHTML = `
-        <td><strong>${this.escapeHtml(property.title)}</strong></td>
-        <td>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
-                 data-property-id="${property._id}" class="thumbnail-clickable">
-            <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
-          </div>
-        </td>
-        <td>${this.escapeHtml(property.estate || '')}</td>
-        <td>${this.escapeHtml(property.propertyType || '')}</td>
-        <td>${listingDisplay}</td>
-        <td>${Utils.formatPrice(property.price)}</td>
-        <td><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
-        <td class="actions">
-          <button class="btn btn-outline edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
-          <button class="btn btn-danger delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
-        </td>
-      `;
-      propertiesTable.appendChild(tr);
-    });
-
-    // Update result count (outside the table)
-    const resultSpan = document.getElementById('filterResultCount');
-    if (resultSpan) {
-      const hasFilters = (filterStatus !== 'all' || filterType !== 'all' || filterEstate !== 'all');
-      if (hasFilters) {
-        resultSpan.innerHTML = `Showing <span>${displayProperties.length}</span> of ${allProperties.length} properties`;
-      } else {
-        resultSpan.innerHTML = `Showing <span>${displayProperties.length}</span> properties`;
-      }
-    }
-
-    this.attachEventListeners();
-
-    // ── Attach sort handlers to table headers ──
-    this.attachSortHandlers();
-  },
-
-  // ── Render pagination using filtered data ──
-  renderPagination() {
-    if (!paginationControls) return;
-    const displayProperties = this.getFilteredAndSortedProperties();
-    const totalPages = Math.ceil(displayProperties.length / this.itemsPerPage);
-
-    if (totalPages <= 1) {
-      paginationControls.innerHTML = '';
-      return;
-    }
-
-    let html = '';
-    if (this.currentPage > 1) {
-      html += `<button class="pagination-btn" data-page="${this.currentPage - 1}">Prev</button>`;
-    }
-    for (let i = 1; i <= totalPages; i++) {
-      if (i === this.currentPage) {
-        html += `<button class="pagination-btn active" data-page="${i}">${i}</button>`;
-      } else if (Math.abs(i - this.currentPage) <= 2 || i === 1 || i === totalPages) {
-        html += `<button class="pagination-btn" data-page="${i}">${i}</button>`;
-      } else if (Math.abs(i - this.currentPage) === 3) {
-        html += `<span style="margin:0 4px;">...</span>`;
-      }
-    }
-    if (this.currentPage < totalPages) {
-      html += `<button class="pagination-btn" data-page="${this.currentPage + 1}">Next</button>`;
-    }
-
-    paginationControls.innerHTML = html;
-    paginationControls.querySelectorAll('.pagination-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const page = parseInt(btn.dataset.page);
-        if (!isNaN(page)) {
-          this.currentPage = page;
-          this.renderPage();
-          this.renderPagination();
-        }
-      });
-    });
-  },
-
-  // ── Attach sort handlers to column headers ──
-  attachSortHandlers() {
-    const sortableFields = [
-      { id: 'title', label: 'Title' },
-      { id: 'estate', label: 'Estate' },
-      { id: 'propertyType', label: 'Type' },
-      { id: 'price', label: 'Price' },
-      { id: 'status', label: 'Status' },
-      { id: 'createdAt', label: 'Date' }
-    ];
-
-    // Find the table header row
-    const thead = document.querySelector('#propertiesTable thead');
-    if (!thead) return;
-
-    // Remove existing sort indicators
-    thead.querySelectorAll('th').forEach(th => {
-      th.style.cursor = 'pointer';
-      th.title = 'Click to sort';
-      // Remove old click listeners (we'll re-bind)
-      const newTh = th.cloneNode(true);
-      th.parentNode.replaceChild(newTh, th);
-    });
-
-    // Add click listeners to each sortable column
-    const headers = thead.querySelectorAll('th');
-    headers.forEach((th, index) => {
-      const field = sortableFields[index]?.id;
-      if (!field) return;
-      th.style.cursor = 'pointer';
-      th.addEventListener('click', () => {
-        // Toggle direction if same field, else set to asc
-        if (this.sortField === field) {
-          this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-          this.sortField = field;
-          this.sortDirection = 'asc';
-        }
-        this.currentPage = 1; // reset to first page
-        this.renderPage();
-        this.renderPagination();
-      });
-
-      // Show current sort indicator
-      if (this.sortField === field) {
-        const arrow = this.sortDirection === 'asc' ? ' ▲' : ' ▼';
-        th.textContent = th.textContent.replace(/[ ▲▼]/g, '') + arrow;
-      }
-    });
-  },
-
-  // ── Other helper methods ──
-  escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-      if (m === '&') return '&amp;';
-      if (m === '<') return '&lt;';
-      if (m === '>') return '&gt;';
-      return m;
-    });
-  },
-
-  attachEventListeners() {
-    // Edit buttons
-    propertiesTable.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
-        try {
-          const property = await PropertyAPI.getPropertyById(id);
-          FormManager.populateForEdit(property);
-        } catch (error) {
-          Utils.showToast('Failed to load property', 'error');
-        }
-      });
-    });
-
-    // Delete buttons
-    propertiesTable.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
-        if (!confirm('Delete this property permanently?')) return;
-        try {
-          await PropertyAPI.deleteProperty(id);
-          Utils.showToast('Property deleted');
-          await PropertiesTable.loadAndRender();
-          if (currentEditId === id) FormManager.reset();
-        } catch (error) {
-          Utils.showToast('Failed to delete', 'error');
-        }
-      });
-    });
-
-    // Thumbnail click -> open image modal
-    propertiesTable.querySelectorAll('.thumbnail-clickable').forEach(thumb => {
-      thumb.addEventListener('click', () => {
-        const id = thumb.dataset.propertyId;
-        const property = allProperties.find(p => p._id === id);
-        if (property && property.images && property.images.length) {
-          ImageModal.open(property.images);
-        }
-      });
-    });
-  },
-
-  async loadAndRender() {
-    this.showLoading();
-    try {
-      const properties = await PropertyAPI.fetchMyProperties();
-      this.render(properties);
-    } catch (error) {
-      this.showError(error.message);
-    }
-  },
-
-  showLoading() {
-    if (!propertiesTable) return;
-    propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>`;
-    if (paginationControls) paginationControls.innerHTML = '';
-  },
-
-  showError(error) {
-    if (!propertiesTable) return;
-    propertiesTable.innerHTML = `<tr><td colspan="8" style="text-align:center;color:red;padding:40px;">Error: ${error}</td></tr>`;
-    if (paginationControls) paginationControls.innerHTML = '';
-  }
-};
 
 // =========================
 // Image Modal
@@ -1897,7 +1907,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('upgradeModal').style.display = 'none';
         });
     }
-
+      // ── Initialize filters ──
+    initFilters();  // ← ADD THIS LINE
     await PropertiesTable.loadAndRender();
     await loadSubscriptionData();
 });
