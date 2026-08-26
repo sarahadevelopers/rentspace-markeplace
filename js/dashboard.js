@@ -128,24 +128,24 @@ const PropertiesTable = {
       if (property.isAirbnb) listingDisplay = 'AIRBNB';
 
       tr.innerHTML = `
-        <td><strong>${this.escapeHtml(property.title)}</strong></td>
-        <td>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
-                 data-property-id="${property._id}" class="thumbnail-clickable">
-            <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
-          </div>
-        </td>
-        <td>${this.escapeHtml(property.estate || '')}</td>
-        <td>${this.escapeHtml(property.propertyType || '')}</td>
-        <td>${listingDisplay}</td>
-        <td>${Utils.formatPrice(property.price)}</td>
-        <td><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
-        <td class="actions">
-          <button class="btn btn-outline edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
-          <button class="btn btn-danger delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
-        </td>
-      `;
+  <td data-label="Title"><strong>${this.escapeHtml(property.title)}</strong></td>
+  <td data-label="Images">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
+           data-property-id="${property._id}" class="thumbnail-clickable">
+      <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
+    </div>
+  </td>
+  <td data-label="Estate">${this.escapeHtml(property.estate || '')}</td>
+  <td data-label="Type">${this.escapeHtml(property.propertyType || '')}</td>
+  <td data-label="Listing">${listingDisplay}</td>
+  <td data-label="Price">${Utils.formatPrice(property.price)}</td>
+  <td data-label="Status"><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
+  <td data-label="Actions" class="actions-cell">
+    <button class="btn btn-sm btn-edit edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
+    <button class="btn btn-sm btn-delete delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
+  </td>
+`;
       propertiesTable.appendChild(tr);
     });
 

@@ -1739,6 +1739,105 @@
   .visibility-upgrade-cta { flex-direction: column; text-align: center; }
   .tier-labels { font-size: 7px; }
 }
+
+/* ===== PROPERTY TABLE – MOBILE CARDS ===== */
+
+/* On mobile, turn the table into cards */
+@media (max-width: 768px) {
+  .table-wrapper {
+    overflow-x: visible;   /* no horizontal scroll */
+    padding: 4px 0;
+  }
+
+  #propertiesTable {
+    min-width: 0;          /* override the forced min-width */
+    width: 100%;
+    display: block;
+  }
+
+  #propertiesTable thead {
+    display: none;
+  }
+
+  #propertiesTable tbody {
+    display: block;
+    width: 100%;
+  }
+
+  #propertiesTable tbody tr {
+    display: block;
+    background: var(--dark-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+
+  #propertiesTable tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  #propertiesTable tbody td:last-child {
+    border-bottom: none;
+  }
+
+  #propertiesTable tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-light);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    min-width: 80px;
+  }
+
+  /* Make the image thumb and badge inline */
+  #propertiesTable tbody td[data-label="Images"] div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Status badge */
+  .status-badge {
+    font-size: 11px;
+  }
+
+  /* Actions column – stack buttons */
+  .actions-cell {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+
+  .actions-cell .btn-sm {
+    width: 100%;
+    text-align: center;
+    padding: 8px 12px;
+    font-size: 13px;
+    justify-content: center;
+  }
+
+  /* Ensure the price is readable */
+  #propertiesTable tbody td[data-label="Price"] {
+    font-weight: 600;
+    color: var(--gold);
+  }
+
+  /* The "Listing" column (RENT/SALE/AIRBNB) */
+  #propertiesTable tbody td[data-label="Listing"] {
+    font-weight: 500;
+  }
+}
   </style>
 </head>
 <body>
