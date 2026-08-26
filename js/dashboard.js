@@ -174,14 +174,46 @@ function getFilteredProperties() {
   };
 }
 
+// =========================
+// Apply Filters (FIXED)
+// =========================
 function applyFilters() {
-  const { properties, count, hasFilters } = getFilteredProperties();
+  // Get filtered properties from the FULL list
+  const filtered = allProperties.filter(p => {
+    let match = true;
+    
+    // Filter by Status
+    if (filterStatus !== 'all') {
+      if (p.status !== filterStatus) match = false;
+    }
+    
+    // Filter by Property Type
+    if (filterType !== 'all') {
+      if (p.propertyType !== filterType) match = false;
+    }
+    
+    // Filter by Estate
+    if (filterEstate !== 'all') {
+      if (p.estate !== filterEstate) match = false;
+    }
+    
+    return match;
+  });
+
+  // Update the result count
+  const resultSpan = document.getElementById('filterResultCount');
+  const hasFilters = (filterStatus !== 'all' || filterType !== 'all' || filterEstate !== 'all');
   
-  // Update the filtered data
-  const filteredData = properties;
-  
-  // Re-render the table with filtered data
-  if (filteredData.length === 0) {
+  if (resultSpan) {
+    if (hasFilters) {
+      resultSpan.innerHTML = `Showing <span>${filtered.length}</span> of ${allProperties.length} properties`;
+    } else {
+      resultSpan.innerHTML = `Showing <span>${filtered.length}</span> properties`;
+    }
+  }
+
+  // If no properties match, show empty state
+  if (filtered.length === 0) {
     propertiesTable.innerHTML = `
       <tr>
         <td colspan="8" class="text-center" style="padding:40px;">
@@ -194,36 +226,120 @@ function applyFilters() {
       </tr>
     `;
     document.getElementById('clearFiltersFromEmpty')?.addEventListener('click', clearFilters);
-  } else {
-    // Use the existing render but pass filtered data
-    const currentPage = PropertiesTable.currentPage;
-    const itemsPerPage = PropertiesTable.itemsPerPage;
-    const start = (currentPage - 1) * itemsPerPage;
-    const paginated = filteredData.slice(start, start + itemsPerPage);
-    
-    // Temporarily override allProperties for rendering
-    const originalAllProperties = allProperties;
-    allProperties = filteredData;
-    PropertiesTable.renderPage();
-    PropertiesTable.renderPagination();
-    allProperties = originalAllProperties; // Restore
+    // Hide pagination
+    if (paginationControls) paginationControls.innerHTML = '';
+    return;
   }
 
-  // Update result count
-  const resultSpan = document.getElementById('filterResultCount');
-  if (resultSpan) {
-    if (hasFilters) {
-      resultSpan.innerHTML = `Showing <span>${count}</span> of ${allProperties.length} properties`;
-    } else {
-      resultSpan.innerHTML = `Showing <span>${count}</span> properties`;
+  // ✅ CORRECT: Use the filtered list directly, not via allProperties
+  const currentPage = PropertiesTable.currentPage || 1;
+  const itemsPerPage = PropertiesTable.itemsPerPage || 10;
+  const start = (currentPage - 1) * itemsPerPage;
+  const paginated = filtered.slice(start, start + itemsPerPage);
+  
+  // Store filtered data temporarily for pagination
+  PropertiesTable._filteredData = filtered;
+  
+  // Render the paginated rows
+  PropertiesTable.renderPageWithData(paginated, filtered.length);
+  PropertiesTable.renderPaginationWithData(filtered.length);
+}
+
+// =========================
+// Override renderPage to use passed data
+// =========================
+PropertiesTable.renderPageWithData = function(pageProperties, totalCount) {
+  if (!propertiesTable) return;
+
+  if (!pageProperties || pageProperties.length === 0) {
+    propertiesTable.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center" style="padding:40px;">
+          <i class="fas fa-filter" style="font-size:32px; color:var(--text-muted); opacity:0.3; display:block; margin-bottom:12px;"></i>
+          <p style="color:var(--text-light);">No properties match your filters</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  propertiesTable.innerHTML = '';
+  pageProperties.forEach(property => {
+    const tr = document.createElement('tr');
+    const thumbSrc = property.images && property.images[0]
+      ? property.images[0]
+      : 'https://via.placeholder.com/44x34?text=No+Img';
+    let listingDisplay = (property.listingType || '').toUpperCase();
+    if (property.isAirbnb) listingDisplay = 'AIRBNB';
+
+    tr.innerHTML = `
+      <td><strong>${this.escapeHtml(property.title)}</strong></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${thumbSrc}" alt="thumb" style="width:44px;height:34px;object-fit:cover;border-radius:8px;cursor:pointer;"
+               data-property-id="${property._id}" class="thumbnail-clickable">
+          <span class="badge bg-success">${property.images ? property.images.length : 0}</span>
+        </div>
+      </td>
+      <td>${this.escapeHtml(property.estate || '')}</td>
+      <td>${this.escapeHtml(property.propertyType || '')}</td>
+      <td>${listingDisplay}</td>
+      <td>${Utils.formatPrice(property.price)}</td>
+      <td><span class="status-badge ${property.status || 'draft'}">${property.status || 'Draft'}</span></td>
+      <td class="actions">
+        <button class="btn btn-outline edit-btn" data-id="${property._id}"><i class="fas fa-edit"></i> Edit</button>
+        <button class="btn btn-danger delete-btn" data-id="${property._id}"><i class="fas fa-trash"></i> Delete</button>
+      </td>
+    `;
+    propertiesTable.appendChild(tr);
+  });
+
+  // Re-attach event listeners
+  this.attachEventListeners();
+};
+
+// =========================
+// Override renderPagination for filtered data
+// =========================
+PropertiesTable.renderPaginationWithData = function(totalCount) {
+  if (!paginationControls) return;
+  
+  const totalPages = Math.ceil(totalCount / this.itemsPerPage);
+  
+  if (totalPages <= 1) {
+    paginationControls.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  if (this.currentPage > 1) {
+    html += `<button class="pagination-btn" data-page="${this.currentPage - 1}">Prev</button>`;
+  }
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === this.currentPage) {
+      html += `<button class="pagination-btn active" data-page="${i}">${i}</button>`;
+    } else if (Math.abs(i - this.currentPage) <= 2 || i === 1 || i === totalPages) {
+      html += `<button class="pagination-btn" data-page="${i}">${i}</button>`;
+    } else if (Math.abs(i - this.currentPage) === 3) {
+      html += `<span style="margin:0 4px;">...</span>`;
     }
   }
-
-  // Update property count display
-  if (propertyCountDisplay) {
-    propertyCountDisplay.textContent = allProperties.length;
+  if (this.currentPage < totalPages) {
+    html += `<button class="pagination-btn" data-page="${this.currentPage + 1}">Next</button>`;
   }
-}
+
+  paginationControls.innerHTML = html;
+  paginationControls.querySelectorAll('.pagination-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const page = parseInt(btn.dataset.page);
+      if (!isNaN(page)) {
+        this.currentPage = page;
+        // Re-apply filters with new page
+        applyFilters();
+      }
+    });
+  });
+};
 
 // =========================
 // Clear Filters
@@ -250,6 +366,7 @@ function initFilters() {
   if (statusSelect) {
     statusSelect.addEventListener('change', function() {
       filterStatus = this.value;
+      PropertiesTable.currentPage = 1; // Reset to first page
       applyFilters();
     });
   }
@@ -257,6 +374,7 @@ function initFilters() {
   if (typeSelect) {
     typeSelect.addEventListener('change', function() {
       filterType = this.value;
+      PropertiesTable.currentPage = 1;
       applyFilters();
     });
   }
@@ -264,6 +382,7 @@ function initFilters() {
   if (estateSelect) {
     estateSelect.addEventListener('change', function() {
       filterEstate = this.value;
+      PropertiesTable.currentPage = 1;
       applyFilters();
     });
   }
