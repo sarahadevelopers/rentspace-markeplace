@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
+const Property = require('../models/Property'); // ⭐ ADD THIS IMPORT
 const { sendSubscriptionConfirmationEmail } = require('../config/email');
 
 // ─── Plan definitions ──────────────────────────────────────────
@@ -55,7 +56,6 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       });
       await subscription.save();
 
-      // Send free plan confirmation email
       try {
         await sendSubscriptionConfirmationEmail(user.email, user.name, plan, 0);
         console.log(`✅ Free plan confirmation email sent to ${user.email}`);
@@ -105,7 +105,6 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       }
     );
 
-    // The service returns a transaction ID; store it as checkout_id
     const checkoutId = sarahaResponse.data.transactionId || sarahaResponse.data.checkout_id;
     if (checkoutId) {
       subscription.metadata = {
@@ -131,14 +130,11 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
 
 // ─── POST /api/subscriptions/saraha-webhook ─────────────────────
 // This endpoint receives callbacks from the Saraha Pay service.
-// The service must forward its callback payload (including checkout_id)
-// to this URL.
 router.post('/saraha-webhook', async (req, res) => {
   try {
     const payload = req.body;
     console.log('📥 Webhook received:', payload);
 
-    // Extract fields (the service may send different keys)
     const checkoutId = payload.checkout_id || payload.checkoutId || payload.transactionId;
     const status = payload.status || payload.paymentStatus;
     const mpesa_receipt = payload.mpesa_receipt || payload.receipt;
@@ -149,12 +145,10 @@ router.post('/saraha-webhook', async (req, res) => {
       return res.status(400).json({ error: 'Missing checkout_id' });
     }
 
-    // Find the subscription by checkout_id stored in metadata
     let subscription = await Subscription.findOne({
       'metadata.checkout_id': checkoutId
     });
 
-    // Fallback: try by transactionRef if sent
     if (!subscription && payload.reference) {
       subscription = await Subscription.findOne({ transactionRef: payload.reference });
     }
@@ -164,7 +158,6 @@ router.post('/saraha-webhook', async (req, res) => {
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
-    // Determine status
     const isSuccess = status === 'paid' || status === 'completed' || status === 'SUCCESS';
 
     if (isSuccess) {
@@ -178,13 +171,20 @@ router.post('/saraha-webhook', async (req, res) => {
       };
       await subscription.save();
 
-      // Update user's plan
+      // ── Update user's plan ──────────────────────────────────────
       const user = await User.findById(subscription.userId);
       if (user) {
         user.subscriptionPlan = subscription.plan;
         user.subscriptionExpiry = subscription.renewalDate;
         await user.save();
         console.log(`✅ User ${user.email} upgraded to ${subscription.plan}`);
+
+        // ⭐⭐⭐ CRITICAL: Update ALL existing properties for this user ⭐⭐⭐
+        const propertyUpdateResult = await Property.updateMany(
+          { ownerId: user._id },
+          { $set: { ownerSubscriptionPlan: subscription.plan } }
+        );
+        console.log(`✅ Updated ${propertyUpdateResult.modifiedCount} properties with plan ${subscription.plan}`);
 
         // ─── Send confirmation email ──────────────────────────────
         try {
