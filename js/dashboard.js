@@ -596,34 +596,27 @@ const Utils = {
 
 // ─── Validate Kenyan Phone Numbers ──────────────────────────────
 function validateKenyanPhone(phone) {
-    // Remove all whitespace and common separators
-    let cleaned = phone.replace(/[\s\-()]/g, '');
-    
-    // Remove + if present
-    cleaned = cleaned.replace(/^\+/, '');
-    
-    // Check if it starts with 0 or 254
-    if (!/^(0|254)\d{9}$/.test(cleaned)) {
-        return { valid: false, formatted: null };
-    }
-    
-    // Format to 254XXXXXXXXX
-    if (cleaned.startsWith('0')) {
-        cleaned = '254' + cleaned.slice(1);
-    }
-    
-    // Now it should be 254 + 9 digits = 12 characters
-    if (cleaned.length === 12 && cleaned.startsWith('254')) {
-        // Check network prefix (optional but recommended)
-        const prefix = cleaned.slice(3, 5);
-        // Valid prefixes: 01, 07, 11 (covers all current prefixes)
-        if (!['01', '07', '11'].includes(prefix)) {
-            return { valid: false, formatted: null };
-        }
-        return { valid: true, formatted: cleaned };
-    }
-    
+  // Remove whitespace and common separators
+  let cleaned = phone.replace(/[\s\-()]/g, '');
+  // Remove leading +
+  cleaned = cleaned.replace(/^\+/, '');
+  
+  // Must start with 0 or 254, followed by exactly 9 digits
+  if (!/^(0|254)\d{9}$/.test(cleaned)) {
     return { valid: false, formatted: null };
+  }
+  
+  // Convert 0... to 254...
+  if (cleaned.startsWith('0')) {
+    cleaned = '254' + cleaned.slice(1);
+  }
+  
+  // Final format: 254 + 9 digits = 12 chars
+  if (cleaned.length === 12 && cleaned.startsWith('254')) {
+    return { valid: true, formatted: cleaned };
+  }
+  
+  return { valid: false, formatted: null };
 }
 
 // =========================
