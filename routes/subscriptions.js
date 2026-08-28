@@ -9,12 +9,7 @@ const Property = require('../models/Property');
 const { sendSubscriptionConfirmationEmail } = require('../config/email');
 
 // ─── Intasend Setup ─────────────────────────────────────────────
-const Intasend = require('intasend-node');
-const intasend = new Intasend(
-  process.env.INTASEND_API_KEY,
-  process.env.INTASEND_PUBLIC_KEY,
-  process.env.INTASEND_ENVIRONMENT || 'sandbox'
-);
+
 
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
