@@ -591,6 +591,40 @@ const Utils = {
 
     delay: (ms) => new Promise(resolve => setTimeout(resolve, ms))
 };
+ // ─── ADD THE FUNCTION HERE ──────────────────────────────
+// 👇 Paste it right here, after the Utils object
+
+// ─── Validate Kenyan Phone Numbers ──────────────────────────────
+function validateKenyanPhone(phone) {
+    // Remove all whitespace and common separators
+    let cleaned = phone.replace(/[\s\-()]/g, '');
+    
+    // Remove + if present
+    cleaned = cleaned.replace(/^\+/, '');
+    
+    // Check if it starts with 0 or 254
+    if (!/^(0|254)\d{9}$/.test(cleaned)) {
+        return { valid: false, formatted: null };
+    }
+    
+    // Format to 254XXXXXXXXX
+    if (cleaned.startsWith('0')) {
+        cleaned = '254' + cleaned.slice(1);
+    }
+    
+    // Now it should be 254 + 9 digits = 12 characters
+    if (cleaned.length === 12 && cleaned.startsWith('254')) {
+        // Check network prefix (optional but recommended)
+        const prefix = cleaned.slice(3, 5);
+        // Valid prefixes: 01, 07, 11 (covers all current prefixes)
+        if (!['01', '07', '11'].includes(prefix)) {
+            return { valid: false, formatted: null };
+        }
+        return { valid: true, formatted: cleaned };
+    }
+    
+    return { valid: false, formatted: null };
+}
 
 // =========================
 // Authentication Helpers
@@ -1773,7 +1807,7 @@ async function openUpgradeModal() {
                 id: 'basic',
                 name: 'Basic',
                 icon: 'fa-star',
-                price: 2500,
+                price: 2,
                 period: 'month',
                 features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
                 popular: false,
@@ -1951,11 +1985,21 @@ async function handleSubscription() {
     }
     const plan = selected.dataset.plan;
     const period = selected.dataset.period || 'monthly';
-    const phone = document.getElementById('subscribePhone').value.trim();
-    if (!phone || !/^254\d{9}$/.test(phone)) {
-        Utils.showToast('Please enter a valid phone number (2547XXXXXXXX).', 'error');
+    const rawPhone = document.getElementById('subscribePhone').value.trim();
+
+    if (!rawPhone) {
+        Utils.showToast('Please enter your phone number.', 'error');
         return;
     }
+
+    // ─── Validate phone number ──────────────────────────────
+    const phoneValidation = validateKenyanPhone(rawPhone);
+    if (!phoneValidation.valid) {
+        Utils.showToast('Please enter a valid Kenyan phone number (e.g., 0712345678 or 254712345678).', 'error');
+        return;
+    }
+
+    const phone = phoneValidation.formatted; // Now 254XXXXXXXXX
 
     const btn = document.getElementById('subscribeBtn');
     btn.disabled = true;
@@ -1966,7 +2010,7 @@ async function handleSubscription() {
         const res = await fetch(`${API_BASE}/api/subscriptions/subscribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ plan, phoneNumber: phone })   // ✅ This is correct
+            body: JSON.stringify({ plan, phoneNumber: phone })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Subscription failed');
