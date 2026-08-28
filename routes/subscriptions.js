@@ -1,12 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios'); // ⬅️ ADD this for calling IntaSend service
 const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
-const Property = require('../models/Property'); // ⭐ ADD THIS IMPORT
+const Property = require('../models/Property');
 const { sendSubscriptionConfirmationEmail } = require('../config/email');
+
+// ─── Intasend Setup ─────────────────────────────────────────────
+const Intasend = require('intasend-node');
+const intasend = new Intasend(
+  process.env.INTASEND_API_KEY,
+  process.env.INTASEND_PUBLIC_KEY,
+  process.env.INTASEND_ENVIRONMENT || 'sandbox'
+);
 
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
@@ -29,7 +37,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan' });
     }
     if (!phoneNumber) {
-      return res.status(400).json({ error: 'Phone number required for STK push' });
+      return res.status(400).json({ error: 'Phone number required' });
     }
 
     const userId = req.user._id;
@@ -58,9 +66,8 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
 
       try {
         await sendSubscriptionConfirmationEmail(user.email, user.name, plan, 0);
-        console.log(`✅ Free plan confirmation email sent to ${user.email}`);
       } catch (emailError) {
-        console.error('❌ Failed to send free plan confirmation email:', emailError);
+        console.error('Email error:', emailError);
       }
 
       return res.json({
@@ -70,7 +77,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       });
     }
 
-    // ── Paid plan – initiate STK push via Saraha Pay service ──
+    // ── Paid plan – forward to IntaSend payment service ──────
     const transactionRef = `RENT-${uuidv4().slice(0, 8)}`;
 
     // Create pending subscription record
@@ -81,122 +88,110 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       paymentStatus: 'pending',
       transactionRef,
       amount,
-      renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+      renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     });
     await subscription.save();
 
-    // ── Call Saraha Pay service ──────────────────────────────────
-    const SARAHA_BASE_URL = process.env.SARAHAPAY_BASE_URL || 'https://sarahapay.onrender.com';
-    const SARAHA_API_URL = `${SARAHA_BASE_URL}/api/pay`;
+    // ─── Call the IntaSend payment service (sarahapay-intasend) ────
+    const intasendServiceUrl = process.env.INTASEND_SERVICE_URL || 'https://sarahapay-intasend.onrender.com';
+    const callbackUrl = process.env.INTASEND_CALLBACK_URL || 'https://rentspace-markeplace.onrender.com/api/payment-callback';
 
-    const sarahaResponse = await axios.post(
-      SARAHA_API_URL,
+    const response = await axios.post(
+      `${intasendServiceUrl}/api/pay`,
       {
-        name: `RentSpace ${plan} Subscription (${transactionRef})`,
         phone: phoneNumber,
-        amount: amount
+        plan: plan,
+        userId: userId,
+        website: 'rentspace',
+        callbackUrl: callbackUrl
       },
       {
-        headers: {
-          'x-api-secret': process.env.SARAHAPAY_API_SECRET,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         timeout: 15000
       }
     );
 
-    const checkoutId = sarahaResponse.data.transactionId || sarahaResponse.data.checkout_id;
-    if (checkoutId) {
-      subscription.metadata = {
-        ...subscription.metadata,
-        checkout_id: checkoutId,
-        sarahaResponse: sarahaResponse.data
-      };
-      await subscription.save();
-    }
+    // Store the checkout ID from the response
+    subscription.metadata = {
+      ...subscription.metadata,
+      checkout_id: response.data.checkoutId,
+      intasendResponse: response.data
+    };
+    await subscription.save();
 
     res.json({
       success: true,
       message: 'STK push initiated. Check your phone for M-Pesa prompt.',
       transactionRef,
-      sarahaResponse: sarahaResponse.data
+      checkoutId: response.data.checkoutId
     });
 
   } catch (error) {
     console.error('Subscription error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Payment initiation failed' });
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.error || 'Payment initiation failed'
+    });
   }
 });
 
-// ─── POST /api/subscriptions/saraha-webhook ─────────────────────
-// This endpoint receives callbacks from the Saraha Pay service.
-router.post('/saraha-webhook', async (req, res) => {
+// ─── POST /api/payment-callback (Called by IntaSend service) ──
+router.post('/payment-callback', async (req, res) => {
   try {
-    const payload = req.body;
-    console.log('📥 Webhook received:', payload);
+    const { transactionRef, userId, plan, status, mpesaReceipt } = req.body;
 
-    const checkoutId = payload.checkout_id || payload.checkoutId || payload.transactionId;
-    const status = payload.status || payload.paymentStatus;
-    const mpesa_receipt = payload.mpesa_receipt || payload.receipt;
-    const amount = payload.amount;
+    console.log(`📥 Payment callback received: ${transactionRef} | ${status}`);
 
-    if (!checkoutId) {
-      console.warn('⚠️ No checkout_id in webhook payload');
-      return res.status(400).json({ error: 'Missing checkout_id' });
-    }
-
-    let subscription = await Subscription.findOne({
-      'metadata.checkout_id': checkoutId
-    });
-
-    if (!subscription && payload.reference) {
-      subscription = await Subscription.findOne({ transactionRef: payload.reference });
-    }
-
+    // Find the subscription
+    const subscription = await Subscription.findOne({ transactionRef });
     if (!subscription) {
-      console.warn(`⚠️ No subscription found for checkout_id: ${checkoutId}`);
+      console.warn(`⚠️ No subscription found for ref: ${transactionRef}`);
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
-    const isSuccess = status === 'paid' || status === 'completed' || status === 'SUCCESS';
+    // Only process if still pending
+    if (subscription.status !== 'pending') {
+      console.log(`⏭️ Subscription ${transactionRef} already processed`);
+      return res.status(200).send('OK');
+    }
 
-    if (isSuccess) {
-      // Update subscription
+    if (status === 'completed') {
+      // Activate subscription
       subscription.status = 'active';
       subscription.paymentStatus = 'paid';
       subscription.metadata = {
         ...subscription.metadata,
-        mpesa_receipt,
-        paidAt: new Date()
+        mpesaReceipt,
+        paidAt: new Date(),
+        verifiedBy: 'callback'
       };
       await subscription.save();
 
-      // ── Update user's plan ──────────────────────────────────────
-      const user = await User.findById(subscription.userId);
+      // Update user and properties
+      const user = await User.findById(userId);
       if (user) {
-        user.subscriptionPlan = subscription.plan;
+        user.subscriptionPlan = plan;
         user.subscriptionExpiry = subscription.renewalDate;
         await user.save();
-        console.log(`✅ User ${user.email} upgraded to ${subscription.plan}`);
 
-        // ⭐⭐⭐ CRITICAL: Update ALL existing properties for this user ⭐⭐⭐
-        const propertyUpdateResult = await Property.updateMany(
+        await Property.updateMany(
           { ownerId: user._id },
-          { $set: { ownerSubscriptionPlan: subscription.plan } }
+          { $set: { ownerSubscriptionPlan: plan } }
         );
-        console.log(`✅ Updated ${propertyUpdateResult.modifiedCount} properties with plan ${subscription.plan}`);
 
-        // ─── Send confirmation email ──────────────────────────────
+        console.log(`✅ User ${user.email} upgraded to ${plan} via callback`);
+
+        // Send confirmation email
         try {
           await sendSubscriptionConfirmationEmail(
             user.email,
             user.name,
-            subscription.plan,
+            plan,
             subscription.amount
           );
-          console.log(`✅ Subscription confirmation email sent to ${user.email}`);
+          console.log(`✅ Confirmation email sent to ${user.email}`);
         } catch (emailError) {
-          console.error('❌ Failed to send subscription confirmation email:', emailError);
+          console.error('Email error:', emailError);
         }
       }
     } else {
@@ -204,14 +199,76 @@ router.post('/saraha-webhook', async (req, res) => {
       subscription.status = 'cancelled';
       subscription.paymentStatus = 'failed';
       await subscription.save();
-      console.log(`❌ Payment failed for subscription ${subscription._id}`);
+      console.log(`❌ Payment failed for ${transactionRef}`);
     }
 
-    // Always respond with 200 OK to acknowledge receipt
     res.status(200).send('OK');
   } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    console.error('❌ Payment callback error:', error);
+    res.status(500).json({ error: 'Callback processing failed' });
+  }
+});
+
+// ─── POST /api/subscriptions/intasend-webhook (Legacy – keep if needed) ──
+// Note: This is no longer used if you're using the external service.
+// But we keep it for backward compatibility or if you switch back.
+router.post('/intasend-webhook', async (req, res) => {
+  // You can keep the existing webhook logic here for reference,
+  // but with the new architecture, it's better to remove or redirect.
+  // For now, we'll just respond OK to avoid errors.
+  console.log('📥 Legacy webhook called (intasend-webhook) — ignoring.');
+  res.status(200).send('OK');
+});
+
+// ─── POST /api/subscriptions/verify-payment (Manual fallback) ──
+router.post('/verify-payment', authMiddleware, async (req, res) => {
+  try {
+    const { transactionRef, mpesaReceipt } = req.body;
+    if (!transactionRef) {
+      return res.status(400).json({ error: 'Transaction reference required' });
+    }
+
+    const subscription = await Subscription.findOne({
+      transactionRef,
+      userId: req.user._id,
+      status: 'pending'
+    });
+
+    if (!subscription) {
+      return res.status(404).json({ error: 'No pending subscription found' });
+    }
+
+    if (!mpesaReceipt) {
+      return res.status(400).json({ error: 'M-Pesa receipt number required' });
+    }
+
+    // Activate subscription
+    subscription.status = 'active';
+    subscription.paymentStatus = 'paid';
+    subscription.metadata = {
+      ...subscription.metadata,
+      mpesaReceipt,
+      verifiedAt: new Date(),
+      verifiedBy: 'manual'
+    };
+    await subscription.save();
+
+    const user = await User.findById(subscription.userId);
+    if (user) {
+      user.subscriptionPlan = subscription.plan;
+      user.subscriptionExpiry = subscription.renewalDate;
+      await user.save();
+
+      await Property.updateMany(
+        { ownerId: user._id },
+        { $set: { ownerSubscriptionPlan: subscription.plan } }
+      );
+    }
+
+    res.json({ success: true, message: 'Subscription activated manually' });
+  } catch (error) {
+    console.error('Manual verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
   }
 });
 

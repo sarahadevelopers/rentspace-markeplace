@@ -1966,7 +1966,7 @@ async function handleSubscription() {
         const res = await fetch(`${API_BASE}/api/subscriptions/subscribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ plan, phoneNumber: phone })
+            body: JSON.stringify({ plan, phoneNumber: phone })   // ✅ This is correct
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Subscription failed');
@@ -1986,7 +1986,6 @@ async function handleSubscription() {
         btn.innerHTML = 'Subscribe Now';
     }
 }
-
 // =========================
 // Initialization
 // =========================
