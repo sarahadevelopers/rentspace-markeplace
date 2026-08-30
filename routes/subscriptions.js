@@ -28,6 +28,8 @@ router.get('/plans', (req, res) => {
 router.post('/subscribe', authMiddleware, async (req, res) => {
   try {
     const { plan, phoneNumber } = req.body;
+
+    // ─── Validate input ────────────────────────────────────────
     if (!plan || !PLANS[plan]) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
@@ -42,7 +44,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     const planData = PLANS[plan];
     const amount = planData.price;
 
-    // ── Free plan ──────────────────────────────────────────────
+    // ─── Free plan ──────────────────────────────────────────────
     if (amount === 0) {
       user.subscriptionPlan = plan;
       user.subscriptionExpiry = null;
@@ -72,7 +74,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       });
     }
 
-    // ── Paid plan – forward to IntaSend payment service ──────
+    // ─── Paid plan – forward to IntaSend payment service ──────
     const transactionRef = `RENT-${uuidv4().slice(0, 8)}`;
 
     // Create pending subscription record
@@ -91,10 +93,12 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     const intasendServiceUrl = process.env.INTASEND_SERVICE_URL || 'https://sarahapay-intasend.onrender.com';
     const callbackUrl = process.env.INTASEND_CALLBACK_URL || 'https://rentspace-markeplace.onrender.com/api/payment-callback';
 
+    // ✅ ADDED: Include the `amount` field in the request payload
     const response = await axios.post(
       `${intasendServiceUrl}/api/pay`,
       {
         phone: phoneNumber,
+        amount: amount,                // ← This was missing!
         plan: plan,
         userId: userId,
         website: 'rentspace',
@@ -122,10 +126,17 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Subscription error:', error.response?.data || error.message);
+    // Better error logging: show both error.response and error.message
+    console.error('Subscription error:', {
+      message: error.message,
+      response: error.response?.data || 'No response data'
+    });
+
+    // Forward the error from the proxy if available
+    const errorMsg = error.response?.data?.error || 'Payment initiation failed';
     res.status(500).json({
       success: false,
-      error: error.response?.data?.error || 'Payment initiation failed'
+      error: errorMsg
     });
   }
 });
