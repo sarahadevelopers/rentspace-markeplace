@@ -87,7 +87,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     const intasendServiceUrl = process.env.INTASEND_SERVICE_URL || 'https://sarahapay-intasend.onrender.com';
     const callbackUrl = process.env.INTASEND_CALLBACK_URL || 'https://rentspace-markeplace.onrender.com/api/payment-callback';
 
-    // ─── Call sarahapay-intasend with the required API secret ──
+    // ─── Call sarahapay-intasend with ALL required fields ──
     const response = await axios.post(
       `${intasendServiceUrl}/api/pay`,
       {
@@ -96,12 +96,13 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         plan: plan,
         userId: userId,
         website: 'rentspace',
-        callbackUrl: callbackUrl
+        callbackUrl: callbackUrl,
+        name: user.name || 'RentSpace User'   // ← ADDED: proxy requires 'name'
       },
       {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-secret': process.env.API_SECRET   // ← MUST be set in your environment
+          'x-api-secret': process.env.API_SECRET   // ← MUST be set in environment
         },
         timeout: 15000
       }
