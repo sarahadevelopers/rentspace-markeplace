@@ -1,15 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
-const axios = require('axios'); // ⬅️ ADD this for calling IntaSend service
+const axios = require('axios');
 const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const Property = require('../models/Property');
 const { sendSubscriptionConfirmationEmail } = require('../config/email');
-
-// ─── Intasend Setup ─────────────────────────────────────────────
-
 
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
@@ -29,7 +26,6 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
   try {
     const { plan, phoneNumber } = req.body;
 
-    // ─── Validate input ────────────────────────────────────────
     if (!plan || !PLANS[plan]) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
@@ -77,7 +73,6 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     // ─── Paid plan – forward to IntaSend payment service ──────
     const transactionRef = `RENT-${uuidv4().slice(0, 8)}`;
 
-    // Create pending subscription record
     const subscription = new Subscription({
       userId,
       plan,
@@ -89,28 +84,29 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     });
     await subscription.save();
 
-    // ─── Call the IntaSend payment service (sarahapay-intasend) ────
     const intasendServiceUrl = process.env.INTASEND_SERVICE_URL || 'https://sarahapay-intasend.onrender.com';
     const callbackUrl = process.env.INTASEND_CALLBACK_URL || 'https://rentspace-markeplace.onrender.com/api/payment-callback';
 
-    // ✅ ADDED: Include the `amount` field in the request payload
+    // ─── Call sarahapay-intasend with the required API secret ──
     const response = await axios.post(
       `${intasendServiceUrl}/api/pay`,
       {
         phone: phoneNumber,
-        amount: amount,                // ← This was missing!
+        amount: amount,
         plan: plan,
         userId: userId,
         website: 'rentspace',
         callbackUrl: callbackUrl
       },
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-secret': process.env.API_SECRET   // ← MUST be set in your environment
+        },
         timeout: 15000
       }
     );
 
-    // Store the checkout ID from the response
     subscription.metadata = {
       ...subscription.metadata,
       checkout_id: response.data.checkoutId,
@@ -126,13 +122,10 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    // Better error logging: show both error.response and error.message
     console.error('Subscription error:', {
       message: error.message,
       response: error.response?.data || 'No response data'
     });
-
-    // Forward the error from the proxy if available
     const errorMsg = error.response?.data?.error || 'Payment initiation failed';
     res.status(500).json({
       success: false,
@@ -148,21 +141,18 @@ router.post('/payment-callback', async (req, res) => {
 
     console.log(`📥 Payment callback received: ${transactionRef} | ${status}`);
 
-    // Find the subscription
     const subscription = await Subscription.findOne({ transactionRef });
     if (!subscription) {
       console.warn(`⚠️ No subscription found for ref: ${transactionRef}`);
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
-    // Only process if still pending
     if (subscription.status !== 'pending') {
       console.log(`⏭️ Subscription ${transactionRef} already processed`);
       return res.status(200).send('OK');
     }
 
     if (status === 'completed') {
-      // Activate subscription
       subscription.status = 'active';
       subscription.paymentStatus = 'paid';
       subscription.metadata = {
@@ -173,7 +163,6 @@ router.post('/payment-callback', async (req, res) => {
       };
       await subscription.save();
 
-      // Update user and properties
       const user = await User.findById(userId);
       if (user) {
         user.subscriptionPlan = plan;
@@ -187,7 +176,6 @@ router.post('/payment-callback', async (req, res) => {
 
         console.log(`✅ User ${user.email} upgraded to ${plan} via callback`);
 
-        // Send confirmation email
         try {
           await sendSubscriptionConfirmationEmail(
             user.email,
@@ -201,7 +189,6 @@ router.post('/payment-callback', async (req, res) => {
         }
       }
     } else {
-      // Payment failed
       subscription.status = 'cancelled';
       subscription.paymentStatus = 'failed';
       await subscription.save();
@@ -215,13 +202,8 @@ router.post('/payment-callback', async (req, res) => {
   }
 });
 
-// ─── POST /api/subscriptions/intasend-webhook (Legacy – keep if needed) ──
-// Note: This is no longer used if you're using the external service.
-// But we keep it for backward compatibility or if you switch back.
+// ─── POST /api/subscriptions/intasend-webhook (Legacy) ──
 router.post('/intasend-webhook', async (req, res) => {
-  // You can keep the existing webhook logic here for reference,
-  // but with the new architecture, it's better to remove or redirect.
-  // For now, we'll just respond OK to avoid errors.
   console.log('📥 Legacy webhook called (intasend-webhook) — ignoring.');
   res.status(200).send('OK');
 });
@@ -248,7 +230,6 @@ router.post('/verify-payment', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'M-Pesa receipt number required' });
     }
 
-    // Activate subscription
     subscription.status = 'active';
     subscription.paymentStatus = 'paid';
     subscription.metadata = {

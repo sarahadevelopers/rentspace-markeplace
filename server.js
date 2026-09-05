@@ -77,18 +77,14 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
     }
 
     // Find user by phone number (format: 2547XXXXXXXX)
-    // Ensure the phone number matches the format stored in your DB
     let userPhone = phone;
-    // If your DB stores phone without leading '254', you may need to normalize
-    // For safety, try both formats
+    // Try both formats (with and without '254')
     let user = await User.findOne({ phone: userPhone });
     if (!user && userPhone.startsWith('254')) {
-      // Try without '254' (e.g., 07XXXXXXXX)
       const altPhone = userPhone.replace(/^254/, '0');
       user = await User.findOne({ phone: altPhone });
     }
     if (!user && !userPhone.startsWith('254')) {
-      // Try with '254'
       const altPhone = '254' + userPhone.replace(/^0/, '');
       user = await User.findOne({ phone: altPhone });
     }
@@ -98,17 +94,14 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Determine subscription plan based on amount (or use a default)
-    // You can map amount to a plan name (e.g., 2 => 'basic', 5 => 'pro', 10 => 'developer')
-    // Adjust according to your pricing
+    // Determine subscription plan based on amount (2 = basic, 5 = pro, 10 = developer)
     let planName = 'basic';
     const amt = parseFloat(amount);
     if (amt >= 10) planName = 'developer';
     else if (amt >= 5) planName = 'pro';
     else if (amt >= 2) planName = 'basic';
 
-    // Update subscription
-    // Adapt this to your actual User schema
+    // Update subscription – adapt to your actual User schema
     user.subscription = {
       plan: planName,
       status: 'active',
