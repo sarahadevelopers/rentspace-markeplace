@@ -14,22 +14,21 @@ const subscriptionRoutes = require('./routes/subscriptions');
 // Import models
 const User = require('./models/User');
 const Property = require('./models/Property');
-const Subscription = require('./models/Subscription'); // ← ADDED
+const Subscription = require('./models/Subscription');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ----- CORS (allow frontend & backend) -----
 const allowedOrigins = [
-  'https://sarahadevelopers.github.io',          // GitHub Pages frontend
-  'https://rentspace-markeplace.onrender.com',   // Render backend (for self‑calls)
-  'http://localhost:5000',                       // Local dev
+  'https://sarahadevelopers.github.io',
+  'https://rentspace-markeplace.onrender.com',
+  'http://localhost:5000',
   'http://localhost:3000'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -49,16 +48,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'RentSpace API is running' });
 });
 
-// Authentication
 app.use('/api/auth', authRoutes);
-
-// Properties
 app.use('/api/properties', propertyRoutes);
-
-// Blog posts
 app.use('/api/posts', postRoutes);
-
-// Subscriptions & Payments (existing)
 app.use('/api/subscriptions', subscriptionRoutes);
 
 // =============================================
@@ -69,16 +61,14 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
     const payload = req.body;
     console.log('📥 Webhook received from sarahapay:', payload);
 
-    // Extract expected fields
     const { checkout_id, status, mpesa_receipt, amount, phone, name, reference } = payload;
 
-    // Only process if payment was successful
     if (status !== 'paid') {
       console.log(`⏭️ Payment status is "${status}", ignoring.`);
       return res.status(200).json({ message: 'Ignored' });
     }
 
-    // ── Find user by phone number ──
+    // ── Find user by phone ──
     let userPhone = phone;
     let user = await User.findOne({ phone: userPhone });
     if (!user && userPhone.startsWith('254')) {
@@ -102,40 +92,35 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
     else if (amt >= 5) planName = 'pro';
     else if (amt >= 2) planName = 'basic';
 
-    // ── Find the pending subscription for this user ──
-    // Try by transactionRef (reference from payload) first
-    let subscription = null;
-    if (reference) {
-      subscription = await Subscription.findOne({ transactionRef: reference });
-    }
-    // If not found, try by userId and status 'pending'
-    if (!subscription) {
-      subscription = await Subscription.findOne({
+    console.log(`👤 Found user: ${user.email} (ID: ${user._id})`);
+
+    // ── Update ALL pending subscriptions for this user ──
+    const result = await Subscription.updateMany(
+      {
         userId: user._id,
         status: 'pending'
-      }).sort({ createdAt: -1 }); // Get the most recent one
-    }
+      },
+      {
+        $set: {
+          status: 'active',
+          paymentStatus: 'paid',
+          'metadata.mpesaReceipt': mpesa_receipt || reference,
+          'metadata.paidAt': new Date(),
+          'metadata.verifiedBy': 'webhook',
+          'metadata.callbackPayload': payload
+        }
+      }
+    );
 
-    // ── Update the subscription document ──
-    if (subscription) {
-      subscription.status = 'active';
-      subscription.paymentStatus = 'paid';
-      subscription.metadata = {
-        ...subscription.metadata,
-        mpesaReceipt: mpesa_receipt || reference,
-        paidAt: new Date(),
-        verifiedBy: 'webhook',
-        callbackPayload: payload
-      };
-      await subscription.save();
-      console.log(`✅ Subscription ${subscription.transactionRef} updated to active`);
-    } else {
-      console.warn(`⚠️ No pending subscription found for user ${user.email}`);
+    console.log(`📝 Updated ${result.nModified} pending subscription(s) for user ${user.email}`);
+
+    if (result.nModified === 0) {
+      console.warn(`⚠️ No pending subscriptions found for user ${user.email}`);
     }
 
     // ── Update the user document ──
     user.subscriptionPlan = planName;
-    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     user.mpesaReceipt = mpesa_receipt || reference;
     user.transactionRef = reference || checkout_id;
     await user.save();
@@ -146,7 +131,7 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       { $set: { ownerSubscriptionPlan: planName } }
     );
 
-    console.log(`✅ Subscription upgraded for ${user.email || user.phone} (plan: ${planName})`);
+    console.log(`✅ Subscription upgraded for ${user.email} (plan: ${planName})`);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('❌ Webhook error:', err);
@@ -154,12 +139,12 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
   }
 });
 
-// ----- Serve static frontend files (HTML, CSS, JS, images, etc.) -----
+// ----- Serve static frontend files -----
 app.use(express.static(path.join(__dirname)));
 
-// ----- SPA fallback – send index.html for any non‑API, non‑file GET request -----
+// ----- SPA fallback -----
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();  // Skip API routes
+  if (req.path.startsWith('/api/')) return next();
   if (req.method !== 'GET') return next();
   res.sendFile(path.join(__dirname, 'index.html'));
 });
