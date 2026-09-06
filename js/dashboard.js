@@ -1304,8 +1304,19 @@ async function loadSubscriptionData() {
         const plan = user.subscriptionPlan || null;
         const expiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
 
-        // No free plan: either has paid plan or none
+        // ── Check if user is on paid active subscription ──────────
         const isActive = plan && ['basic', 'pro', 'developer'].includes(plan) && expiry && expiry > new Date();
+
+        // ── Check if user is on Bronze trial (free plan, within 30 days of signup) ──
+        const isTrial = plan === 'free' && user.createdAt &&
+                        (new Date() - new Date(user.createdAt)) < 30 * 24 * 60 * 60 * 1000;
+
+        // ── Calculate days remaining in trial ──────────────────────
+        let daysRemaining = 0;
+        if (isTrial && user.createdAt) {
+            const trialEnd = new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+            daysRemaining = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
+        }
 
         // ── Get listing count ──────────────────────────────────────
         let listingsUsed = 0;
@@ -1316,8 +1327,9 @@ async function loadSubscriptionData() {
 
         // ── Define plan limits ────────────────────────────────────
         const planLimits = {
+            free: 2,
             basic: 20,
-            pro: 9999,
+            pro: 50,
             developer: 9999
         };
         const maxListings = plan && planLimits[plan] ? planLimits[plan] : 0;
@@ -1326,9 +1338,10 @@ async function loadSubscriptionData() {
 
         // ── Get plan display name ─────────────────────────────────
         const planDisplayMap = {
-            basic: 'Basic',
-            pro: 'Silver',
-            developer: 'Gold'
+            free: 'Bronze',
+            basic: 'Silver',
+            pro: 'Gold',
+            developer: 'Platinum'
         };
         const planDisplayName = plan ? planDisplayMap[plan] || plan.charAt(0).toUpperCase() + plan.slice(1) : 'No Active Plan';
 
@@ -1336,8 +1349,29 @@ async function loadSubscriptionData() {
         const badge = document.getElementById('planBadge');
         const dot = document.getElementById('planStatusDot');
 
+        // ── Common element references ─────────────────────────────
+        const currentPlanEl = document.getElementById('currentPlan');
+        const expiryEl = document.getElementById('planExpiry');
+        const usedEl = document.getElementById('listingsUsed');
+        const priceEl = document.getElementById('planPrice');
+        const maxDisplay = document.getElementById('maxListingsDisplay');
+        const progressWrapper = document.getElementById('subProgressWrapper');
+        const progressBar = document.getElementById('subProgressBar');
+        const progressUsed = document.getElementById('progressUsed');
+        const progressTotal = document.getElementById('progressTotal');
+        const progressStatus = document.getElementById('progressStatus');
+        const actionsContainer = document.getElementById('planActions');
+
+        // ── Price map (testing) ──────────────────────────────────
+        const priceMap = {
+            free: 'KES 0 (Trial)',
+            basic: 'KES 2',
+            pro: 'KES 5',
+            developer: 'KES 10'
+        };
+
         if (isActive) {
-            // ── Active subscription ──────────────────────────────
+            // ─── Active paid subscription ──────────────────────────
             if (badge) {
                 badge.textContent = planDisplayName;
                 badge.className = 'plan-badge active';
@@ -1346,36 +1380,15 @@ async function loadSubscriptionData() {
                 dot.className = 'plan-status-dot active';
             }
 
-            // Update plan details
-            const currentPlanEl = document.getElementById('currentPlan');
             if (currentPlanEl) currentPlanEl.textContent = planDisplayName;
-
-            const expiryEl = document.getElementById('planExpiry');
             if (expiryEl) expiryEl.textContent = expiry ? expiry.toLocaleDateString() : '—';
-
-            const usedEl = document.getElementById('listingsUsed');
             if (usedEl) usedEl.textContent = listingsUsed;
-
-            const priceEl = document.getElementById('planPrice');
-            const priceMap = {
-                basic: 'KES 2,500/mo',
-                pro: 'KES 5,000/mo',
-                developer: 'KES 10,000/mo'
-            };
             if (priceEl) priceEl.textContent = priceMap[plan] || '—';
-
-            const maxDisplay = document.getElementById('maxListingsDisplay');
             if (maxDisplay) {
                 maxDisplay.textContent = isUnlimited ? '♾️' : `/ ${maxListings}`;
             }
 
             // ── Progress bar ──────────────────────────────────────
-            const progressWrapper = document.getElementById('subProgressWrapper');
-            const progressBar = document.getElementById('subProgressBar');
-            const progressUsed = document.getElementById('progressUsed');
-            const progressTotal = document.getElementById('progressTotal');
-            const progressStatus = document.getElementById('progressStatus');
-
             if (progressWrapper) progressWrapper.style.display = 'block';
             if (progressUsed) progressUsed.textContent = listingsUsed;
             if (progressTotal) progressTotal.textContent = isUnlimited ? '♾️' : maxListings;
@@ -1396,7 +1409,6 @@ async function loadSubscriptionData() {
             }
 
             // ── Actions ────────────────────────────────────────────
-            const actionsContainer = document.getElementById('planActions');
             if (actionsContainer) {
                 actionsContainer.innerHTML = `
                     <div style="text-align: right; font-size: 13px; color: var(--text-muted); padding: 8px 0;">
@@ -1412,44 +1424,85 @@ async function loadSubscriptionData() {
                 });
             }
 
-        } else {
-            // ── No subscription ──────────────────────────────────
+        } else if (isTrial) {
+            // ─── Bronze Trial ──────────────────────────────────────
             if (badge) {
-                badge.textContent = 'No Subscription';
+                badge.textContent = `Bronze (Trial)`;
+                badge.className = 'plan-badge trial';
+            }
+            if (dot) {
+                dot.className = 'plan-status-dot trial';
+            }
+
+            if (currentPlanEl) currentPlanEl.textContent = 'Bronze (Trial)';
+            if (expiryEl) expiryEl.textContent = `${daysRemaining} days remaining`;
+            if (usedEl) usedEl.textContent = listingsUsed;
+            if (priceEl) priceEl.textContent = 'KES 0 (Trial)';
+            if (maxDisplay) {
+                maxDisplay.textContent = `/ ${planLimits.free}`;
+            }
+
+            // ── Progress bar (limited to 2) ──────────────────────
+            if (progressWrapper) progressWrapper.style.display = 'block';
+            if (progressUsed) progressUsed.textContent = listingsUsed;
+            if (progressTotal) progressTotal.textContent = planLimits.free;
+            if (progressBar) {
+                const pct = Math.min((listingsUsed / planLimits.free) * 100, 100);
+                progressBar.style.width = pct + '%';
+                progressBar.classList.remove('warning', 'danger');
+                if (pct > 90) progressBar.classList.add('danger');
+                else if (pct > 70) progressBar.classList.add('warning');
+            }
+            if (progressStatus) {
+                if (listingsUsed >= planLimits.free) {
+                    progressStatus.textContent = `⚠️ You've used all your trial listings. Upgrade to add more.`;
+                } else {
+                    progressStatus.textContent = `⏳ Trial ends in ${daysRemaining} days – upgrade to keep your listings live!`;
+                }
+            }
+
+            // ── Actions ────────────────────────────────────────────
+            if (actionsContainer) {
+                actionsContainer.innerHTML = `
+                    <div class="upgrade-msg" style="border-left-color: #cd7f32;">
+                        <i class="fas fa-clock" style="color: #cd7f32;"></i> 
+                        Your Bronze trial ends in ${daysRemaining} days. Upgrade to keep your listings live!
+                    </div>
+                    <button class="btn-upgrade" id="upgradeBtn">
+                        <i class="fas fa-rocket"></i> Upgrade Now – From KES 2/mo
+                    </button>
+                `;
+                document.getElementById('upgradeBtn')?.addEventListener('click', openUpgradeModal);
+            }
+
+        } else {
+            // ─── No subscription (trial expired or never started) ──
+            if (badge) {
+                badge.textContent = plan === 'free' ? 'Trial Expired' : 'No Subscription';
                 badge.className = 'plan-badge inactive';
             }
             if (dot) {
                 dot.className = 'plan-status-dot inactive';
             }
 
-            const currentPlanEl = document.getElementById('currentPlan');
-            if (currentPlanEl) currentPlanEl.textContent = 'No Active Subscription';
-
-            const expiryEl = document.getElementById('planExpiry');
+            if (currentPlanEl) currentPlanEl.textContent = plan === 'free' ? 'Trial Expired' : 'No Active Subscription';
             if (expiryEl) expiryEl.textContent = '—';
-
-            const usedEl = document.getElementById('listingsUsed');
             if (usedEl) usedEl.textContent = '—';
-
-            const priceEl = document.getElementById('planPrice');
             if (priceEl) priceEl.textContent = '—';
-
-            const maxDisplay = document.getElementById('maxListingsDisplay');
             if (maxDisplay) maxDisplay.textContent = '';
 
             // ── Hide progress bar ──────────────────────────────────
-            const progressWrapper = document.getElementById('subProgressWrapper');
             if (progressWrapper) progressWrapper.style.display = 'none';
 
             // ── Show upgrade CTA ──────────────────────────────────
-            const actionsContainer = document.getElementById('planActions');
             if (actionsContainer) {
+                const msg = plan === 'free' ? 'Your trial has expired. Subscribe to keep your listings live.' : 'Subscribe to start listing properties.';
                 actionsContainer.innerHTML = `
                     <div class="upgrade-msg">
-                        <i class="fas fa-lock"></i> Subscribe to start listing properties
+                        <i class="fas fa-lock"></i> ${msg}
                     </div>
                     <button class="btn-upgrade" id="upgradeBtn">
-                        <i class="fas fa-rocket"></i> Subscribe Now – From KES 2,500/mo
+                        <i class="fas fa-rocket"></i> Subscribe Now – From KES 2/mo
                     </button>
                 `;
                 document.getElementById('upgradeBtn')?.addEventListener('click', openUpgradeModal);
@@ -1457,7 +1510,6 @@ async function loadSubscriptionData() {
         }
 
         // ── Update visibility tier ──
-        // ✅ Now inside the try block, after plan and isActive are defined
         updateVisibilityTier(plan, isActive);
 
     } catch (error) {
@@ -1470,43 +1522,43 @@ async function loadSubscriptionData() {
 // =========================
 function updateVisibilityTier(plan, isActive) {
   const visibilityMap = {
-    free: {
-      label: 'Free',
-      badgeClass: 'free',
-      boost: '0%',
-      rank: 'Standard',
-      description: 'Your listings appear in the standard position in search results. Upgrade to get more visibility.',
-      barWidth: '10%',
-      showUpgrade: true
-    },
-    basic: {
-      label: 'Basic',
-      badgeClass: 'basic',
-      boost: '15%',
-      rank: 'Basic Boost',
-      description: 'Your listings get a small visibility boost. Upgrade to Silver or Gold for even more exposure.',
-      barWidth: '30%',
-      showUpgrade: true
-    },
-    pro: {
-      label: 'Popular',
-      badgeClass: 'pro',
-      boost: '50%',
-      rank: 'High Visibility',
-      description: 'Your listings are ranked high and shown with a 🔥 Popular badge!',
-      barWidth: '60%',
-      showUpgrade: true
-    },
-    developer: {
-      label: 'Premium',
-      badgeClass: 'developer',
-      boost: '100%',
-      rank: 'Top Tier',
-      description: 'Your listings appear at the very top with a 🏆 Premium badge!',
-      barWidth: '85%',
-      showUpgrade: false
-    }
-  };
+  free: {
+    label: 'Bronze',
+    badgeClass: 'free',
+    boost: '0%',
+    rank: 'Standard',
+    description: 'Your listings appear in the standard position. Upgrade for more visibility.',
+    barWidth: '10%',
+    showUpgrade: true
+  },
+  basic: {
+    label: 'Silver',
+    badgeClass: 'basic',
+    boost: '15%',
+    rank: 'Basic Boost',
+    description: 'Your listings get a small visibility boost. Upgrade to Gold or Platinum for more exposure.',
+    barWidth: '30%',
+    showUpgrade: true
+  },
+  pro: {
+    label: 'Gold',
+    badgeClass: 'pro',
+    boost: '50%',
+    rank: 'High Visibility',
+    description: 'Your listings are ranked high and shown with a 🔥 Popular badge!',
+    barWidth: '60%',
+    showUpgrade: true
+  },
+  developer: {
+    label: 'Platinum',
+    badgeClass: 'developer',
+    boost: '100%',
+    rank: 'Top Tier',
+    description: 'Your listings appear at the very top with a 🏆 Premium badge!',
+    barWidth: '85%',
+    showUpgrade: false
+  }
+};
 
   const tierKey = (isActive && plan && visibilityMap[plan]) ? plan : 'free';
   const tier = visibilityMap[tierKey] || visibilityMap.free;
@@ -1795,38 +1847,48 @@ async function openUpgradeModal() {
     }
 
     const PACKAGES = {
-        monthly: [
-            {
-                id: 'basic',
-                name: 'Basic',
-                icon: 'fa-star',
-                price: 2,
-                period: 'month',
-                features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
-                popular: false,
-                color: '#c5a059'
-            },
-            {
-                id: 'pro',
-                name: 'Silver',
-                icon: 'fa-gem',
-                price: 5000,
-                period: 'month',
-                features: ['Unlimited listings', '📊 Advanced analytics', 'Priority support', 'WhatsApp leads', '⭐ Featured placement'],
-                popular: true,
-                color: '#b0b0b0'
-            },
-            {
-                id: 'developer',
-                name: 'Gold',
-                icon: 'fa-crown',
-                price: 10000,
-                period: 'month',
-                features: ['Unlimited listings', '📊 Premium analytics', '24/7 priority support', 'WhatsApp leads', '⭐ Featured placement', '🔌 API access', '📦 Bulk upload'],
-                popular: false,
-                color: '#d4a843'
-            }
-        ],
+  monthly: [
+    {
+      id: 'free',
+      name: 'Bronze',
+      icon: 'fa-shield',
+      price: 0,        // or 500 if you make it paid
+      period: 'month',
+      features: ['2 listings', 'Standard visibility', 'Email support'],
+      popular: false,
+      color: '#cd7f32'  // bronze color
+    },
+    {
+      id: 'basic',
+      name: 'Silver',
+      icon: 'fa-gem',
+      price: 2,
+      period: 'month',
+      features: ['20 listings', 'Basic boost', 'WhatsApp leads', 'Email support'],
+      popular: false,
+      color: '#c0c0c0'  // silver color
+    },
+    {
+      id: 'pro',
+      name: 'Gold',
+      icon: 'fa-crown',
+      price: 5,
+      period: 'month',
+      features: ['50 listings', 'Popular badge', 'Priority support', 'Featured placement'],
+      popular: true,
+      color: '#d4af37'  // gold color
+    },
+    {
+      id: 'developer',
+      name: 'Platinum',
+      icon: 'fa-gem',
+      price: 10,
+      period: 'month',
+      features: ['Unlimited listings', 'Premium badge', 'API access', 'Top ranking', 'Bulk upload'],
+      popular: false,
+      color: '#e5e4e2'  // platinum color
+    }
+  ],
         weekly: [
             {
                 id: 'basic',

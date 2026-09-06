@@ -3,6 +3,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const Property = require('../models/Property');
+const User = require('../models/User'); // added for user lookup
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -49,11 +50,48 @@ async function generateUniqueSlug(title, existingId = null) {
   return slug;
 }
 
+// ─── Helper: check if a user's subscription is active ─────────
+function isSubscriptionActive(user) {
+  if (!user) return false;
+  const plan = user.subscriptionPlan || 'free';
+  const expiry = user.subscriptionExpiry;
+
+  // If plan is free, check trial period (30 days from signup)
+  if (plan === 'free') {
+    const trialStart = user.createdAt || user.trialStartDate;
+    if (!trialStart) return false;
+    const trialEnd = new Date(trialStart);
+    trialEnd.setDate(trialEnd.getDate() + 30);
+    return new Date() < trialEnd;
+  }
+
+  // For paid plans, check expiry
+  if (['basic', 'pro', 'developer'].includes(plan)) {
+    if (!expiry) return false;
+    return new Date(expiry) > new Date();
+  }
+
+  return false;
+}
+
+// ─── Helper: get listing limit for a user ──────────────────────
+function getListingLimit(user) {
+  const plan = user.subscriptionPlan || 'free';
+  const limits = {
+    free: 2,
+    basic: 20,
+    pro: Infinity,
+    developer: Infinity
+  };
+  return limits[plan] || 2;
+}
+
 // ─── GET /api/properties (public, with ranking) ────────────────
 // Properties are ranked by:
 //   1. featured (manual override)
 //   2. owner subscription plan (developer > pro > basic > free)
 //   3. creation date (newest first)
+// Additionally, contact details are hidden for free/trial-expired listings.
 router.get('/', async (req, res) => {
   try {
     const {
@@ -109,10 +147,45 @@ router.get('/', async (req, res) => {
       { $limit: limitNum }
     ];
 
-    const [properties, total] = await Promise.all([
-      Property.aggregate(pipeline),
-      Property.countDocuments(query)
-    ]);
+    let properties = await Property.aggregate(pipeline);
+    const total = await Property.countDocuments(query);
+
+    // ── Enrich with owner details and hide contact info for free ──
+    const propertyIds = properties.map(p => p._id);
+    const owners = await User.find({ _id: { $in: properties.map(p => p.ownerId) } })
+      .select('_id phone email name subscriptionPlan subscriptionExpiry createdAt');
+
+    const ownerMap = {};
+    owners.forEach(u => { ownerMap[u._id.toString()] = u; });
+
+    properties = properties.map(p => {
+      const owner = ownerMap[p.ownerId.toString()];
+      if (!owner) return p;
+
+      const isActive = isSubscriptionActive(owner);
+      const isFree = (owner.subscriptionPlan || 'free') === 'free';
+      // If free or trial expired, hide contact details
+      const hideContact = !isActive || (isFree && !isSubscriptionActive(owner));
+
+      // Create a clean copy
+      const property = { ...p };
+      if (hideContact) {
+        // Remove sensitive fields
+        delete property.phone;
+        delete property.email;
+        delete property.whatsapp;
+        // Optionally replace with a concierge message
+        property.contactHidden = true;
+        property.contactMessage = 'Contact details hidden. Please upgrade or login to view.';
+      } else {
+        // Include contact details from owner (if not already in property)
+        property.phone = owner.phone || property.phone;
+        property.email = owner.email || property.email;
+        property.ownerName = owner.name || property.ownerName;
+      }
+
+      return property;
+    });
 
     res.json({
       success: true,
@@ -177,6 +250,29 @@ router.get('/:slug', async (req, res) => {
     // Increment view count asynchronously
     Property.updateOne({ _id: property._id }, { $inc: { views: 1 } }).exec();
 
+    // ── Enrich with owner details and hide contact info if needed ──
+    if (property.ownerId) {
+      const owner = await User.findById(property.ownerId)
+        .select('_id phone email name subscriptionPlan subscriptionExpiry createdAt');
+      if (owner) {
+        const isActive = isSubscriptionActive(owner);
+        const isFree = (owner.subscriptionPlan || 'free') === 'free';
+        const hideContact = !isActive || (isFree && !isSubscriptionActive(owner));
+
+        if (hideContact) {
+          delete property.phone;
+          delete property.email;
+          delete property.whatsapp;
+          property.contactHidden = true;
+          property.contactMessage = 'Contact details hidden. Please login or upgrade to view.';
+        } else {
+          property.phone = owner.phone || property.phone;
+          property.email = owner.email || property.email;
+          property.ownerName = owner.name || property.ownerName;
+        }
+      }
+    }
+
     res.json({ success: true, property });
   } catch (error) {
     console.error('Error fetching property:', error);
@@ -219,23 +315,31 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       });
     }
 
-    // ── 2. Subscription check (PAID-ONLY, admins bypass) ──────────
+    // ── 2. Subscription, Trial, and Listing Limit Check ──────────
     const isAdmin = req.user.role === 'admin';
 
     if (!isAdmin) {
-      const validPlans = ['basic', 'pro', 'developer'];
-      const userPlan = req.user.subscriptionPlan || 'free';
-      const userExpiry = req.user.subscriptionExpiry;
+      // Check if user is active (subscription or trial)
+      const isActive = isSubscriptionActive(req.user);
 
-      let isPaid = validPlans.includes(userPlan);
-      if (isPaid && userExpiry) {
-        isPaid = new Date(userExpiry) > new Date();
-      }
-
-      if (!isPaid) {
+      if (!isActive) {
         return res.status(403).json({
           success: false,
-          error: 'You need an active subscription to list properties. Please upgrade from your dashboard.'
+          error: 'Your subscription has expired or trial ended. Please upgrade to list properties.'
+        });
+      }
+
+      // Check listing limit
+      const maxListings = getListingLimit(req.user);
+      const currentListings = await Property.countDocuments({
+        ownerId: req.user._id,
+        status: { $ne: 'archived' }
+      });
+
+      if (currentListings >= maxListings) {
+        return res.status(403).json({
+          success: false,
+          error: `You have reached your plan's listing limit (${maxListings === Infinity ? 'unlimited' : maxListings}). Please upgrade to add more properties.`
         });
       }
     }
@@ -276,7 +380,6 @@ router.post('/', authMiddleware, upload.array('images', 10), async (req, res) =>
       status: status || 'pending',
       available_for: available_for || '',
       rental_type: rental_type || '',
-      // ⭐ NEW: Store the owner's subscription plan for ranking
       ownerSubscriptionPlan: req.user.subscriptionPlan || 'free'
     };
 
@@ -336,7 +439,6 @@ router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) 
     const updateData = { ...req.body };
 
     // ── Handle images ──────────────────────────────────────────
-    // 1. Parse existing images from form (sent as JSON string)
     let existingImages = [];
     if (req.body.existingImages) {
       try {
@@ -348,16 +450,11 @@ router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) 
       }
     }
 
-    // 2. Get new uploaded images (if any)
     const newImageUrls = req.files ? req.files.map(file => file.path) : [];
-
-    // 3. Combine: keep existing images + append new ones
     let finalImages = existingImages.length > 0 ? existingImages : property.images || [];
     if (newImageUrls.length > 0) {
       finalImages = [...finalImages, ...newImageUrls];
     }
-
-    // 4. Update the images array in updateData
     updateData.images = finalImages;
 
     // ── Handle slug if title changes ──────────────────────────
@@ -373,11 +470,6 @@ router.put('/:id', authMiddleware, upload.array('images', 10), async (req, res) 
     delete updateData.slug; // handled above
     delete updateData.existingImages;
     delete updateData.existingPublicIds;
-
-    // ── Optionally update ownerSubscriptionPlan if user plan changed ──
-    // We keep the plan at creation time; if you want dynamic, use join.
-    // If you want to update it on edit, uncomment:
-    // updateData.ownerSubscriptionPlan = req.user.subscriptionPlan || 'free';
 
     // ── Update the property ────────────────────────────────────
     const updatedProperty = await Property.findByIdAndUpdate(

@@ -75,6 +75,15 @@ const propertySchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // ─── Lead tracking ──────────────────────────────────────────
+  leadCount: {
+    type: Number,
+    default: 0
+  },
+  contactHidden: {
+    type: Boolean,
+    default: false
+  },
 
   // ─── Availability (for filtering) ──────────────────────────
   available_for: {
@@ -99,6 +108,12 @@ const propertySchema = new mongoose.Schema({
     default: 'free'
   },
 
+  // ─── Auto-expiry ────────────────────────────────────────────
+  expiresAt: {
+    type: Date,
+    default: null
+  },
+
   // ─── Timestamps ─────────────────────────────────────────────
   createdAt: {
     type: Date,
@@ -110,14 +125,22 @@ const propertySchema = new mongoose.Schema({
   }
 });
 
-// ─── Index for efficient ranking sorting ──────────────────────
-//   Sorts: featured first, then by subscription priority,
-//   then by creation date (newest first).
+// ─── Indexes for performance ──────────────────────────────────
 propertySchema.index({ featured: -1, ownerSubscriptionPlan: 1, createdAt: -1 });
+propertySchema.index({ ownerId: 1, status: 1 }); // For listing limit queries
+propertySchema.index({ slug: 1 });
+propertySchema.index({ status: 1, expiresAt: 1 }); // For expiry cleanup
 
 // ─── Pre‑save hook ─────────────────────────────────────────────
 propertySchema.pre('save', async function() {
   this.updatedAt = Date.now();
+});
+
+// ─── Pre‑save: auto-set expiresAt for free listings ──────────
+propertySchema.pre('save', async function() {
+  if (this.isNew && this.ownerSubscriptionPlan === 'free') {
+    this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  }
 });
 
 module.exports = mongoose.model('Property', propertySchema);

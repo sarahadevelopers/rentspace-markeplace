@@ -35,12 +35,13 @@ const userSchema = new mongoose.Schema({
   },
   verified: {
     type: Boolean,
-    default: false
+    default: false // ✅ For "Verified Only" rule
   },
   verificationToken: {
     type: String,
     select: false
   },
+  // ─── Subscription Fields ────────────────────────────────
   subscriptionPlan: {
     type: String,
     enum: ['free', 'basic', 'pro', 'developer'],
@@ -50,6 +51,11 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  trialStartDate: {
+    type: Date,
+    default: Date.now // ✅ For 30-day trial tracking
+  },
+  // ─── Reset Password ──────────────────────────────────────
   resetPasswordToken: {
     type: String,
     select: false
@@ -58,27 +64,39 @@ const userSchema = new mongoose.Schema({
     type: Date,
     select: false
   },
+  // ─── Agent Profile (Optional) ───────────────────────────
+  agentProfile: {
+    companyName: { type: String },
+    logo: { type: String },
+    website: { type: String },
+    bio: { type: String }
+  },
+  // ─── Timestamps ──────────────────────────────────────────
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-});
+}, { timestamps: true }); // ✅ Auto-updates `updatedAt`
 
-// ─── FIXED: Encrypt password using bcrypt ──────────────────────
+// ─── Encrypt password ──────────────────────────────────────
 userSchema.pre('save', async function() {
   if (!this.isModified('password')) return;
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// ─── Match user entered password to hashed password ─────────────
+// ─── Match password ────────────────────────────────────────
 userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// ─── Indexes for performance ────────────────────────────────────
-//userSchema.index({ email: 1 });
-//userSchema.index({ phone: 1 });
+// ─── Indexes for performance ──────────────────────────────
+userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 });
 userSchema.index({ resetPasswordToken: 1 }, { sparse: true });
 
 module.exports = mongoose.model('User', userSchema);

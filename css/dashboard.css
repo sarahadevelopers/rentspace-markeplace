@@ -1263,3 +1263,21 @@ textarea.form-control {
         padding: 10px 14px;
     }
 }
+
+.plan-badge.trial {
+    background: rgba(197, 160, 89, 0.15);
+    color: #c5a059;
+    border: 1px solid rgba(197, 160, 89, 0.3);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.plan-status-dot.trial {
+    background-color: #c5a059;
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.4);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

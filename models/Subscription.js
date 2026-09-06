@@ -37,9 +37,45 @@ const subscriptionSchema = new mongoose.Schema({
   renewalDate: {
     type: Date
   },
+  cancelledAt: {
+    type: Date,
+    default: null
+  },
+  expiredAt: {
+    type: Date,
+    default: null
+  },
   metadata: {
-    type: Object // Store Saraha Pay response
+    type: Object // Store IntaSend response, callback payload, etc.
   }
 }, { timestamps: true });
+
+// ─── Indexes for performance ──────────────────────────────────
+subscriptionSchema.index({ userId: 1, status: 1 });
+subscriptionSchema.index({ transactionRef: 1 });
+subscriptionSchema.index({ status: 1, renewalDate: 1 });
+
+// ─── Instance method: check if subscription is active ──────
+subscriptionSchema.methods.isActive = function() {
+  if (this.status !== 'active') return false;
+  if (!this.renewalDate) return false;
+  return new Date(this.renewalDate) > new Date();
+};
+
+// ─── Static method: expire past subscriptions ──────────────
+subscriptionSchema.statics.expirePastSubscriptions = async function() {
+  const now = new Date();
+  const result = await this.updateMany(
+    {
+      status: 'active',
+      renewalDate: { $lt: now }
+    },
+    {
+      status: 'expired',
+      expiredAt: now
+    }
+  );
+  return result;
+};
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);
