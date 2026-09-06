@@ -26,7 +26,13 @@ let pendingFormData = null; // Store form data for retry
 let filterStatus = 'all';
 let filterType = 'all';
 let filterEstate = 'all';
-
+// ─── Global Constants ──────────────────────────────────────────
+const PLAN_DISPLAY_MAP = {
+    free: 'Bronze',
+    basic: 'Silver',
+    pro: 'Gold',
+    developer: 'Platinum'
+};
 
 // =========================
 // Properties Table
@@ -1336,14 +1342,8 @@ async function loadSubscriptionData() {
         const isUnlimited = maxListings === 9999;
         const percentage = isUnlimited ? 50 : (maxListings > 0 ? Math.min((listingsUsed / maxListings) * 100, 100) : 0);
 
-        // ── Get plan display name ─────────────────────────────────
-        const planDisplayMap = {
-            free: 'Bronze',
-            basic: 'Silver',
-            pro: 'Gold',
-            developer: 'Platinum'
-        };
-        const planDisplayName = plan ? planDisplayMap[plan] || plan.charAt(0).toUpperCase() + plan.slice(1) : 'No Active Plan';
+        // ── Get plan display name using GLOBAL constant ──────────
+        const planDisplayName = plan ? PLAN_DISPLAY_MAP[plan] || plan.charAt(0).toUpperCase() + plan.slice(1) : 'No Active Plan';
 
         // ── Update badge ──────────────────────────────────────────
         const badge = document.getElementById('planBadge');
@@ -1847,78 +1847,78 @@ async function openUpgradeModal() {
     }
 
     const PACKAGES = {
-  monthly: [
-    {
-      id: 'free',
-      name: 'Bronze',
-      icon: 'fa-shield',
-      price: 0,        // or 500 if you make it paid
-      period: 'month',
-      features: ['2 listings', 'Standard visibility', 'Email support'],
-      popular: false,
-      color: '#cd7f32'  // bronze color
-    },
-    {
-      id: 'basic',
-      name: 'Silver',
-      icon: 'fa-gem',
-      price: 2,
-      period: 'month',
-      features: ['20 listings', 'Basic boost', 'WhatsApp leads', 'Email support'],
-      popular: false,
-      color: '#c0c0c0'  // silver color
-    },
-    {
-      id: 'pro',
-      name: 'Gold',
-      icon: 'fa-crown',
-      price: 5,
-      period: 'month',
-      features: ['50 listings', 'Popular badge', 'Priority support', 'Featured placement'],
-      popular: true,
-      color: '#d4af37'  // gold color
-    },
-    {
-      id: 'developer',
-      name: 'Platinum',
-      icon: 'fa-gem',
-      price: 10,
-      period: 'month',
-      features: ['Unlimited listings', 'Premium badge', 'API access', 'Top ranking', 'Bulk upload'],
-      popular: false,
-      color: '#e5e4e2'  // platinum color
-    }
-  ],
+        monthly: [
+            {
+                id: 'free',
+                name: 'Bronze',
+                icon: 'fa-shield',
+                price: 0,
+                period: 'month',
+                features: ['2 listings', 'Standard visibility', 'Email support'],
+                popular: false,
+                color: '#cd7f32'
+            },
+            {
+                id: 'basic',
+                name: 'Silver',
+                icon: 'fa-gem',
+                price: 2,
+                period: 'month',
+                features: ['20 listings', 'Basic boost', 'WhatsApp leads', 'Email support'],
+                popular: false,
+                color: '#c0c0c0'
+            },
+            {
+                id: 'pro',
+                name: 'Gold',
+                icon: 'fa-crown',
+                price: 5,
+                period: 'month',
+                features: ['50 listings', 'Popular badge', 'Priority support', 'Featured placement'],
+                popular: true,
+                color: '#d4af37'
+            },
+            {
+                id: 'developer',
+                name: 'Platinum',
+                icon: 'fa-gem',
+                price: 10,
+                period: 'month',
+                features: ['Unlimited listings', 'Premium badge', 'API access', 'Top ranking', 'Bulk upload'],
+                popular: false,
+                color: '#e5e4e2'
+            }
+        ],
         weekly: [
             {
                 id: 'basic',
-                name: 'Basic',
+                name: 'Silver',
                 icon: 'fa-star',
                 price: 700,
                 period: 'week',
                 features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
                 popular: false,
-                color: '#c5a059'
+                color: '#c0c0c0'
             },
             {
                 id: 'pro',
-                name: 'Silver',
+                name: 'Gold',
                 icon: 'fa-gem',
                 price: 1400,
                 period: 'week',
                 features: ['Unlimited listings', '📊 Advanced analytics', 'Priority support', 'WhatsApp leads', '⭐ Featured placement'],
                 popular: true,
-                color: '#b0b0b0'
+                color: '#d4af37'
             },
             {
                 id: 'developer',
-                name: 'Gold',
+                name: 'Platinum',
                 icon: 'fa-crown',
                 price: 2800,
                 period: 'week',
                 features: ['Unlimited listings', '📊 Premium analytics', '24/7 priority support', 'WhatsApp leads', '⭐ Featured placement', '🔌 API access', '📦 Bulk upload'],
                 popular: false,
-                color: '#d4a843'
+                color: '#e5e4e2'
             }
         ]
     };
@@ -1927,8 +1927,6 @@ async function openUpgradeModal() {
 
     function renderPlans(period) {
         const plans = PACKAGES[period] || PACKAGES.monthly;
-        const periodLabel = period === 'monthly' ? 'per month' : 'per week';
-
         let html = `
             <div class="modal-packages">
                 <div class="modal-period-toggle">
@@ -1939,7 +1937,7 @@ async function openUpgradeModal() {
                 <div class="packages-grid">
         `;
 
-        plans.forEach((pkg, index) => {
+        plans.forEach((pkg) => {
             const popularBadge = pkg.popular ? `<div class="popular-badge">🔥 Most Popular</div>` : '';
             html += `
                 <div class="package-card ${pkg.popular ? 'popular' : ''}" data-plan="${pkg.id}" data-period="${period}">
@@ -2039,7 +2037,8 @@ async function handleSubscription() {
         return;
     }
     const plan = selected.dataset.plan;
-    const period = selected.dataset.period || 'monthly';
+    // period is used for display only – not needed in the API call
+    // const period = selected.dataset.period || 'monthly';
     const rawPhone = document.getElementById('subscribePhone').value.trim();
 
     if (!rawPhone) {
@@ -2073,10 +2072,72 @@ async function handleSubscription() {
         Utils.showToast('STK push sent. Check your phone.', 'success');
         document.getElementById('upgradeModal').style.display = 'none';
 
-        await refreshUserData();
-        setTimeout(async () => {
-            await retryPendingProperty();
-        }, 2000);
+        // ─── Poll for subscription update ──────────────────────────
+        // The webhook takes a few seconds to process. Poll until
+        // the subscription is confirmed or timeout (30 seconds).
+        Utils.showToast('⏳ Waiting for payment confirmation...', 'info');
+
+        let attempts = 0;
+        const maxAttempts = 15; // 15 * 2s = 30 seconds max
+        let subscriptionConfirmed = false;
+
+        while (attempts < maxAttempts && !subscriptionConfirmed) {
+            attempts++;
+            await new Promise(r => setTimeout(r, 2000)); // Wait 2 seconds
+
+            try {
+                const token = getToken();
+                if (!token) break;
+
+                // Fetch updated user data
+                const userRes = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (userRes.ok) {
+                    const userData = await userRes.json();
+                    const user = userData.user || userData;
+                    
+                    // Save to localStorage
+                    localStorage.setItem('rentspace_user', JSON.stringify(user));
+
+                    // Check if subscription is now active
+                    const currentPlan = user.subscriptionPlan;
+                    if (currentPlan && ['basic', 'pro', 'developer'].includes(currentPlan)) {
+                        subscriptionConfirmed = true;
+                        console.log(`✅ Subscription confirmed! Plan: ${currentPlan}`);
+                        
+                        // Reload the dashboard UI
+                        await loadSubscriptionData();
+                        Utils.showToast(`✅ ${PLAN_DISPLAY_MAP[currentPlan] || currentPlan} plan activated!`, 'success');
+
+                        // Retry pending property creation if any
+                        setTimeout(async () => {
+                            await retryPendingProperty();
+                        }, 1000);
+                        break;
+                    }
+                }
+            } catch (pollError) {
+                console.warn('Poll attempt failed:', pollError);
+                // Continue polling - network might be slow
+            }
+
+            // Show progress message every 6 seconds (3 attempts × 2s)
+            if (attempts % 3 === 0) {
+                Utils.showToast(`⏳ Still waiting for payment confirmation... (${attempts * 2}s)`, 'info');
+            }
+        }
+
+        // ─── If subscription wasn't confirmed ──────────────────────
+        if (!subscriptionConfirmed) {
+            Utils.showToast(
+                '⚠️ Payment may still be processing. Please refresh the page in a few moments to see your updated subscription.',
+                'warning'
+            );
+            // Do one final refresh attempt
+            await refreshUserData();
+        }
 
     } catch (error) {
         Utils.showToast(error.message, 'error');
