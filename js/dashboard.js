@@ -2037,8 +2037,6 @@ async function handleSubscription() {
         return;
     }
     const plan = selected.dataset.plan;
-    // period is used for display only – not needed in the API call
-    // const period = selected.dataset.period || 'monthly';
     const rawPhone = document.getElementById('subscribePhone').value.trim();
 
     if (!rawPhone) {
@@ -2046,18 +2044,28 @@ async function handleSubscription() {
         return;
     }
 
-    // ─── Validate phone number ──────────────────────────────
     const phoneValidation = validateKenyanPhone(rawPhone);
     if (!phoneValidation.valid) {
         Utils.showToast('Please enter a valid Kenyan phone number (e.g., 0712345678 or 254712345678).', 'error');
         return;
     }
 
-    const phone = phoneValidation.formatted; // Now 254XXXXXXXXX
+    const phone = phoneValidation.formatted;
 
+    // ── Get modal elements ──────────────────────────────────────
+    const modal = document.getElementById('upgradeModal');
+    const planList = document.getElementById('planList');
     const btn = document.getElementById('subscribeBtn');
+    const closeBtn = document.getElementById('closeModalBtn');
+
+    // ── Show loading state inside modal ──────────────────────────
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    // Disable close button during processing
+    closeBtn.disabled = true;
+    closeBtn.style.opacity = '0.5';
+    closeBtn.style.cursor = 'not-allowed';
 
     try {
         const token = getToken();
@@ -2069,27 +2077,32 @@ async function handleSubscription() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Subscription failed');
 
-        Utils.showToast('STK push sent. Check your phone.', 'success');
-        document.getElementById('upgradeModal').style.display = 'none';
+        // ─── Replace modal content with loading spinner ──────────
+        planList.innerHTML = `
+            <div style="text-align:center; padding:40px 20px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:48px; color:#c5a059; margin-bottom:20px; display:block;"></i>
+                <h3 style="color:#fff; margin-bottom:8px;">STK Push Sent</h3>
+                <p style="color:#aaa; font-size:15px;">Check your phone and enter your M‑Pesa PIN.</p>
+                <p style="color:#888; font-size:13px; margin-top:8px;">Waiting for payment confirmation...</p>
+                <div style="margin-top:20px; width:100%; max-width:200px; margin-left:auto; margin-right:auto; height:4px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                    <div style="width:0%; height:100%; background:linear-gradient(90deg, #c5a059, #d4b37a); border-radius:4px; animation: loadingBar 30s ease-in-out forwards;"></div>
+                </div>
+            </div>
+        `;
 
         // ─── Poll for subscription update ──────────────────────────
-        // The webhook takes a few seconds to process. Poll until
-        // the subscription is confirmed or timeout (30 seconds).
-        Utils.showToast('⏳ Waiting for payment confirmation...', 'info');
-
         let attempts = 0;
-        const maxAttempts = 15; // 15 * 2s = 30 seconds max
+        const maxAttempts = 15; // 15 * 2s = 30 seconds
         let subscriptionConfirmed = false;
 
         while (attempts < maxAttempts && !subscriptionConfirmed) {
             attempts++;
-            await new Promise(r => setTimeout(r, 2000)); // Wait 2 seconds
+            await new Promise(r => setTimeout(r, 2000));
 
             try {
                 const token = getToken();
                 if (!token) break;
 
-                // Fetch updated user data
                 const userRes = await fetch(`${API_BASE}/api/auth/me`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -2097,53 +2110,87 @@ async function handleSubscription() {
                 if (userRes.ok) {
                     const userData = await userRes.json();
                     const user = userData.user || userData;
-                    
-                    // Save to localStorage
                     localStorage.setItem('rentspace_user', JSON.stringify(user));
 
-                    // Check if subscription is now active
                     const currentPlan = user.subscriptionPlan;
                     if (currentPlan && ['basic', 'pro', 'developer'].includes(currentPlan)) {
                         subscriptionConfirmed = true;
                         console.log(`✅ Subscription confirmed! Plan: ${currentPlan}`);
-                        
-                        // Reload the dashboard UI
-                        await loadSubscriptionData();
-                        Utils.showToast(`✅ ${PLAN_DISPLAY_MAP[currentPlan] || currentPlan} plan activated!`, 'success');
 
-                        // Retry pending property creation if any
-                        setTimeout(async () => {
-                            await retryPendingProperty();
-                        }, 1000);
+                        // ─── Show success inside modal ──────────────
+                        planList.innerHTML = `
+                            <div style="text-align:center; padding:40px 20px;">
+                                <i class="fas fa-check-circle" style="font-size:48px; color:#4CAF50; margin-bottom:20px; display:block;"></i>
+                                <h3 style="color:#fff; margin-bottom:8px;">✅ ${PLAN_DISPLAY_MAP[currentPlan] || currentPlan} Plan Activated!</h3>
+                                <p style="color:#aaa; font-size:15px;">Your subscription is now active.</p>
+                            </div>
+                        `;
+
+                        // ─── Close modal after 1.5s ────────────────
+                        setTimeout(() => {
+                            modal.style.display = 'none';
+                            // Re-enable button for next time
+                            btn.disabled = false;
+                            btn.innerHTML = 'Subscribe Now';
+                            closeBtn.disabled = false;
+                            closeBtn.style.opacity = '1';
+                            closeBtn.style.cursor = 'pointer';
+                            // Reload dashboard
+                            loadSubscriptionData();
+                            // Retry pending property
+                            setTimeout(async () => {
+                                await retryPendingProperty();
+                            }, 500);
+                        }, 1500);
+
                         break;
                     }
                 }
             } catch (pollError) {
                 console.warn('Poll attempt failed:', pollError);
-                // Continue polling - network might be slow
-            }
-
-            // Show progress message every 6 seconds (3 attempts × 2s)
-            if (attempts % 3 === 0) {
-                Utils.showToast(`⏳ Still waiting for payment confirmation... (${attempts * 2}s)`, 'info');
             }
         }
 
         // ─── If subscription wasn't confirmed ──────────────────────
         if (!subscriptionConfirmed) {
-            Utils.showToast(
-                '⚠️ Payment may still be processing. Please refresh the page in a few moments to see your updated subscription.',
-                'warning'
-            );
-            // Do one final refresh attempt
-            await refreshUserData();
+            planList.innerHTML = `
+                <div style="text-align:center; padding:40px 20px;">
+                    <i class="fas fa-clock" style="font-size:48px; color:#ffc107; margin-bottom:20px; display:block;"></i>
+                    <h3 style="color:#fff; margin-bottom:8px;">⏳ Still Processing</h3>
+                    <p style="color:#aaa; font-size:15px;">Your payment may still be processing.</p>
+                    <p style="color:#888; font-size:13px; margin-top:8px;">Please <strong>refresh the page</strong> in a few moments to see your updated subscription.</p>
+                    <button class="btn btn-primary" onclick="refreshUserData(); document.getElementById('upgradeModal').style.display = 'none';" style="margin-top:20px;">
+                        <i class="fas fa-sync"></i> Refresh Now
+                    </button>
+                </div>
+            `;
+            // Re-enable close button
+            closeBtn.disabled = false;
+            closeBtn.style.opacity = '1';
+            closeBtn.style.cursor = 'pointer';
+            // Re-enable subscribe button
+            btn.disabled = false;
+            btn.innerHTML = 'Subscribe Now';
         }
 
     } catch (error) {
-        Utils.showToast(error.message, 'error');
-    } finally {
+        // ─── Show error inside modal ──────────────────────────────
+        planList.innerHTML = `
+            <div style="text-align:center; padding:40px 20px;">
+                <i class="fas fa-exclamation-circle" style="font-size:48px; color:#dc3545; margin-bottom:20px; display:block;"></i>
+                <h3 style="color:#fff; margin-bottom:8px;">❌ Something Went Wrong</h3>
+                <p style="color:#aaa; font-size:15px;">${error.message || 'Please try again.'}</p>
+                <button class="btn btn-primary" onclick="document.getElementById('upgradeModal').style.display = 'none';" style="margin-top:20px;">
+                    Close
+                </button>
+            </div>
+        `;
         btn.disabled = false;
         btn.innerHTML = 'Subscribe Now';
+        closeBtn.disabled = false;
+        closeBtn.style.opacity = '1';
+        closeBtn.style.cursor = 'pointer';
+        Utils.showToast(error.message, 'error');
     }
 }
 // =========================
