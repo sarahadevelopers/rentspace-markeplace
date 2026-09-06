@@ -64,7 +64,19 @@ const propertySchema = new mongoose.Schema({
   // ─── Status & Metadata ────────────────────────────────────
   status: {
     type: String,
-    enum: ['draft', 'pending', 'approved', 'rejected', 'published', 'rented', 'expired', 'archived'],
+    enum: [
+      'draft',
+      'pending',
+      'approved',
+      'rejected',
+      'published',
+      'rented',
+      'expired',
+      'archived',
+      'available',   // ✅ Added
+      'sold',        // ✅ Added
+      'reserved'     // ✅ Added
+    ],
     default: 'pending'
   },
   featured: {
