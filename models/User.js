@@ -35,12 +35,13 @@ const userSchema = new mongoose.Schema({
   },
   verified: {
     type: Boolean,
-    default: false // ✅ For "Verified Only" rule
+    default: false // For "Verified Only" rule
   },
   verificationToken: {
     type: String,
     select: false
   },
+
   // ─── Subscription Fields ────────────────────────────────
   subscriptionPlan: {
     type: String,
@@ -53,8 +54,19 @@ const userSchema = new mongoose.Schema({
   },
   trialStartDate: {
     type: Date,
-    default: Date.now // ✅ For 30-day trial tracking
+    default: Date.now // For 30-day trial tracking
   },
+
+  // ─── Payment Receipt Tracking (optional) ───────────────
+  mpesaReceipt: {
+    type: String,
+    default: null
+  },
+  transactionRef: {
+    type: String,
+    default: null
+  },
+
   // ─── Reset Password ──────────────────────────────────────
   resetPasswordToken: {
     type: String,
@@ -64,6 +76,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     select: false
   },
+
   // ─── Agent Profile (Optional) ───────────────────────────
   agentProfile: {
     companyName: { type: String },
@@ -71,6 +84,7 @@ const userSchema = new mongoose.Schema({
     website: { type: String },
     bio: { type: String }
   },
+
   // ─── Timestamps ──────────────────────────────────────────
   createdAt: {
     type: Date,
@@ -80,7 +94,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-}, { timestamps: true }); // ✅ Auto-updates `updatedAt`
+}, { timestamps: true }); // Auto-updates `updatedAt`
 
 // ─── Encrypt password ──────────────────────────────────────
 userSchema.pre('save', async function() {

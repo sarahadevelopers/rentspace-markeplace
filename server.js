@@ -11,8 +11,9 @@ const propertyRoutes = require('./routes/properties');
 const postRoutes = require('./routes/posts');
 const subscriptionRoutes = require('./routes/subscriptions');
 
-// Import User model (adjust path if your model is elsewhere)
+// Import User and Property models
 const User = require('./models/User');
+const Property = require('./models/Property');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,7 +61,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 
 // =============================================
-// Webhook from sarahapay-intasend
+// Webhook from sarahapay-intasend (FIXED)
 // =============================================
 app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
   try {
@@ -101,16 +102,21 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
     else if (amt >= 5) planName = 'pro';
     else if (amt >= 2) planName = 'basic';
 
-    // Update subscription – adapt to your actual User schema
-    user.subscription = {
-      plan: planName,
-      status: 'active',
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-      mpesaReceipt: mpesa_receipt || reference,
-      transactionRef: reference || checkout_id
-    };
+    // ✅ FIXED: Use the correct top‑level fields
+    user.subscriptionPlan = planName;
+    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    // Optionally store receipt and reference (fields must exist in User model)
+    user.mpesaReceipt = mpesa_receipt || reference;
+    user.transactionRef = reference || checkout_id;
+
     await user.save();
+
+    // ── Update all properties owned by this user ──
+    await Property.updateMany(
+      { ownerId: user._id },
+      { $set: { ownerSubscriptionPlan: planName } }
+    );
 
     console.log(`✅ Subscription upgraded for ${user.email || user.phone} (plan: ${planName})`);
     res.status(200).json({ success: true });
