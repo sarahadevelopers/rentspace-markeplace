@@ -11,9 +11,10 @@ const propertyRoutes = require('./routes/properties');
 const postRoutes = require('./routes/posts');
 const subscriptionRoutes = require('./routes/subscriptions');
 
-// Import User and Property models
+// Import models
 const User = require('./models/User');
 const Property = require('./models/Property');
+const Subscription = require('./models/Subscription'); // ← ADDED
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -61,7 +62,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 
 // =============================================
-// Webhook from sarahapay-intasend (FIXED)
+// Webhook from sarahapay-intasend (FULLY FIXED)
 // =============================================
 app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
   try {
@@ -77,9 +78,8 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       return res.status(200).json({ message: 'Ignored' });
     }
 
-    // Find user by phone number (format: 2547XXXXXXXX)
+    // ── Find user by phone number ──
     let userPhone = phone;
-    // Try both formats (with and without '254')
     let user = await User.findOne({ phone: userPhone });
     if (!user && userPhone.startsWith('254')) {
       const altPhone = userPhone.replace(/^254/, '0');
@@ -95,21 +95,49 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Determine subscription plan based on amount (2 = basic, 5 = pro, 10 = developer)
+    // ── Determine plan from amount ──
     let planName = 'basic';
     const amt = parseFloat(amount);
     if (amt >= 10) planName = 'developer';
     else if (amt >= 5) planName = 'pro';
     else if (amt >= 2) planName = 'basic';
 
-    // ✅ FIXED: Use the correct top‑level fields
+    // ── Find the pending subscription for this user ──
+    // Try by transactionRef (reference from payload) first
+    let subscription = null;
+    if (reference) {
+      subscription = await Subscription.findOne({ transactionRef: reference });
+    }
+    // If not found, try by userId and status 'pending'
+    if (!subscription) {
+      subscription = await Subscription.findOne({
+        userId: user._id,
+        status: 'pending'
+      }).sort({ createdAt: -1 }); // Get the most recent one
+    }
+
+    // ── Update the subscription document ──
+    if (subscription) {
+      subscription.status = 'active';
+      subscription.paymentStatus = 'paid';
+      subscription.metadata = {
+        ...subscription.metadata,
+        mpesaReceipt: mpesa_receipt || reference,
+        paidAt: new Date(),
+        verifiedBy: 'webhook',
+        callbackPayload: payload
+      };
+      await subscription.save();
+      console.log(`✅ Subscription ${subscription.transactionRef} updated to active`);
+    } else {
+      console.warn(`⚠️ No pending subscription found for user ${user.email}`);
+    }
+
+    // ── Update the user document ──
     user.subscriptionPlan = planName;
     user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-
-    // Optionally store receipt and reference (fields must exist in User model)
     user.mpesaReceipt = mpesa_receipt || reference;
     user.transactionRef = reference || checkout_id;
-
     await user.save();
 
     // ── Update all properties owned by this user ──
