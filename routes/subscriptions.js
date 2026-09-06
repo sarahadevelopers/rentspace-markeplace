@@ -155,13 +155,15 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     );
 
     // ─── Store checkout ID from proxy response ────────────────
-    subscription.metadata = {
-      ...subscription.metadata,
-      checkout_id: response.data.checkoutId,
-      intasendResponse: response.data,
-      initiatedAt: new Date()
-    };
-    await subscription.save();
+   // ─── Store checkout ID from proxy response ────────────────
+const checkoutId = response.data.checkoutId || response.data.checkout_id || response.data.id;
+subscription.metadata = {
+  ...subscription.metadata,
+  checkout_id: checkoutId,
+  intasendResponse: response.data,
+  initiatedAt: new Date()
+};
+await subscription.save();
 
     res.json({
       success: true,
