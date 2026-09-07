@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-
+<!-- Theme color for mobile browser bar -->
+<meta name="theme-color" content="#c5a059">
     <!-- PRIMARY SEO TAGS -->
     <title>RentSpace | Apartments & Houses for Sale & Rent in Kitengela & Syokimau</title>
     <meta name="description" content="Discover verified apartments, houses, and land for sale and rent in Kitengela, Syokimau, and Karen. Premium real estate listings in Nairobi. Book a viewing today!">
     <link rel="canonical" href="https://rentspace.co.ke" />
+    <!-- PWA Manifest -->
+<link rel="manifest" href="/rentspace-markeplace/manifest.json">
 
     <!-- LOCAL BUSINESS SCHEMA (JSON-LD) -->
     <script type="application/ld+json">
@@ -29,6 +32,15 @@
       "sameAs": ["https://wa.me/254723562484"]
     }
     </script>
+
+    <!-- PWA Service Worker Registration -->
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/rentspace-markeplace/service-worker.js')
+      .then(() => console.log('✅ Service Worker registered'))
+      .catch((err) => console.error('❌ Service Worker failed:', err));
+  }
+</script>
 
     <!-- OPEN GRAPH (Social Media) -->
     <meta property="og:title" content="RentSpace | Verified Properties for Sale & Rent in Kitengela & Syokimau">
