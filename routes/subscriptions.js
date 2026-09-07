@@ -6,7 +6,11 @@ const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const Property = require('../models/Property');
-const { sendSubscriptionConfirmationEmail } = require('../config/email');
+const { 
+  sendSubscriptionConfirmationEmail,
+  sendRenewalReminderEmail,
+  sendExpiredEmail
+} = require('../config/email');
 
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
@@ -400,6 +404,70 @@ router.get('/status', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Error fetching subscription status:', error);
     res.status(500).json({ error: 'Failed to fetch subscription status' });
+  }
+});
+
+// ─── GET /api/subscriptions/check-expiry ─────────────────────────
+router.get('/check-expiry', async (req, res) => {
+  try {
+    const secret = req.query.secret;
+    if (secret !== process.env.CRON_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const now = new Date();
+    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // ─── Users expiring in 3 days ──────────────────────────────
+    const expiringUsers = await User.find({
+      subscriptionPlan: { $ne: 'free' },
+      subscriptionExpiry: { $gt: now, $lt: threeDaysFromNow },
+      $or: [{ lastReminderSent: { $lt: now } }, { lastReminderSent: null }]
+    });
+
+    let reminderCount = 0;
+    for (const user of expiringUsers) {
+      const daysRemaining = Math.ceil((user.subscriptionExpiry - now) / (1000 * 60 * 60 * 24));
+      if (daysRemaining === 3) {
+        try {
+          await sendRenewalReminderEmail(user.email, user.name, user.subscriptionPlan, daysRemaining);
+          user.lastReminderSent = now;
+          await user.save();
+          reminderCount++;
+        } catch (err) {
+          console.error(`❌ Reminder failed for ${user.email}:`, err.message);
+        }
+      }
+    }
+
+    // ─── Users expired today ────────────────────────────────────
+    const expiredUsers = await User.find({
+      subscriptionPlan: { $ne: 'free' },
+      subscriptionExpiry: { $gt: oneDayAgo, $lt: now },
+      expiredEmailSent: false
+    });
+
+    let expiredCount = 0;
+    for (const user of expiredUsers) {
+      try {
+        await sendExpiredEmail(user.email, user.name, user.subscriptionPlan);
+        user.expiredEmailSent = true;
+        await user.save();
+        expiredCount++;
+      } catch (err) {
+        console.error(`❌ Expired email failed for ${user.email}:`, err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      expiringRemindersSent: reminderCount,
+      expiredEmailsSent: expiredCount
+    });
+  } catch (error) {
+    console.error('❌ check-expiry error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
