@@ -19,6 +19,9 @@ const Subscription = require('./models/Subscription');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ✅ Fix for express-rate-limit behind Render's proxy
+app.set('trust proxy', 1);
+
 // ----- CORS (allow frontend & backend) -----
 const allowedOrigins = [
   'https://sarahadevelopers.github.io',
@@ -54,7 +57,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 
 // =============================================
-// Webhook from sarahapay-intasend (FIXED - uses checkout_id)
+// Webhook from sarahapay-intasend (FULLY FIXED)
 // =============================================
 app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
   try {
@@ -68,10 +71,10 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       return res.status(200).json({ message: 'Ignored' });
     }
 
-    // ─── Step 1: Find the subscription by checkout_id ──────────────
+    // ─── Step 1: Find the subscription ──────────────────────────────
     let subscription = null;
 
-    // Try by checkout_id (stored in metadata)
+    // 1. Try by checkout_id (stored in metadata)
     if (checkout_id) {
       subscription = await Subscription.findOne({
         'metadata.checkout_id': checkout_id
@@ -79,15 +82,22 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       if (subscription) console.log(`✅ Found subscription by checkout_id: ${checkout_id}`);
     }
 
-    // If not found, try by transactionRef (PAY-... from proxy)
+    // 2. Try by api_ref (stored in metadata) – NEW
+    if (!subscription && reference) {
+      subscription = await Subscription.findOne({
+        'metadata.api_ref': reference
+      });
+      if (subscription) console.log(`✅ Found subscription by api_ref: ${reference}`);
+    }
+
+    // 3. Try by transactionRef (RENT-... or PAY-...)
     if (!subscription && reference) {
       subscription = await Subscription.findOne({ transactionRef: reference });
       if (subscription) console.log(`✅ Found subscription by transactionRef: ${reference}`);
     }
 
-    // If still not found, fallback to phone-based lookup (legacy)
+    // 4. Fallback: phone-based lookup (legacy)
     if (!subscription && phone) {
-      // Find user by phone (try multiple formats)
       let userPhone = phone;
       let user = await User.findOne({ phone: userPhone });
       if (!user && userPhone.startsWith('254')) {
@@ -108,7 +118,7 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
     }
 
     if (!subscription) {
-      console.warn(`⚠️ No pending subscription found for checkout_id: ${checkout_id} or reference: ${reference}`);
+      console.warn(`⚠️ No pending subscription found for checkout_id: ${checkout_id}, api_ref: ${reference}, or transactionRef: ${reference}`);
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
@@ -128,7 +138,6 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
     else if (amt >= 2) planName = 'basic';
 
     // ─── Step 4: Update ALL pending subscriptions for this user ──
-    // (In case there are multiple, we update all)
     const result = await Subscription.updateMany(
       {
         userId: user._id,
