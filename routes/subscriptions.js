@@ -12,7 +12,7 @@ const { sendSubscriptionConfirmationEmail } = require('../config/email');
 const PLANS = {
   free: {
     name: 'Bronze',
-    listings: 2,
+    listings: 1,
     price: 0,
     featured: false,
     analytics: false,
@@ -20,16 +20,16 @@ const PLANS = {
   },
   basic: {
     name: 'Silver',
-    listings: 20,
-    price: 2,
+    listings: 15,
+    price: 999,
     featured: false,
     analytics: true,
     badge: false
   },
   pro: {
     name: 'Gold',
-    listings: 50,
-    price: 5,
+    listings: 40,
+    price: 1999,
     featured: true,
     analytics: true,
     badge: true
@@ -37,7 +37,7 @@ const PLANS = {
   developer: {
     name: 'Platinum',
     listings: Infinity,
-    price: 10,
+    price: 3999,
     featured: true,
     analytics: true,
     badge: true

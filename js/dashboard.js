@@ -1333,11 +1333,11 @@ async function loadSubscriptionData() {
 
         // ── Define plan limits ────────────────────────────────────
         const planLimits = {
-            free: 2,
-            basic: 20,
-            pro: 50,
-            developer: 9999
-        };
+  free: 1,
+  basic: 15,
+  pro: 40,
+  developer: 9999
+};
         const maxListings = plan && planLimits[plan] ? planLimits[plan] : 0;
         const isUnlimited = maxListings === 9999;
         const percentage = isUnlimited ? 50 : (maxListings > 0 ? Math.min((listingsUsed / maxListings) * 100, 100) : 0);
@@ -1363,12 +1363,12 @@ async function loadSubscriptionData() {
         const actionsContainer = document.getElementById('planActions');
 
         // ── Price map (testing) ──────────────────────────────────
-        const priceMap = {
-            free: 'KES 0 (Trial)',
-            basic: 'KES 2',
-            pro: 'KES 5',
-            developer: 'KES 10'
-        };
+      const priceMap = {
+  free: 'KES 0 (Trial)',
+  basic: 'KES 999/mo',
+  pro: 'KES 1,999/mo',
+  developer: 'KES 3,999/mo'
+};
 
         if (isActive) {
             // ─── Active paid subscription ──────────────────────────
@@ -1521,7 +1521,7 @@ async function loadSubscriptionData() {
 // Visibility & Ranking
 // =========================
 function updateVisibilityTier(plan, isActive) {
-  const visibilityMap = {
+ const visibilityMap = {
   free: {
     label: 'Bronze',
     badgeClass: 'free',
@@ -1846,82 +1846,83 @@ async function openUpgradeModal() {
         }
     }
 
-    const PACKAGES = {
-        monthly: [
-            {
-                id: 'free',
-                name: 'Bronze',
-                icon: 'fa-shield',
-                price: 0,
-                period: 'month',
-                features: ['2 listings', 'Standard visibility', 'Email support'],
-                popular: false,
-                color: '#cd7f32'
-            },
-            {
-                id: 'basic',
-                name: 'Silver',
-                icon: 'fa-gem',
-                price: 2,
-                period: 'month',
-                features: ['20 listings', 'Basic boost', 'WhatsApp leads', 'Email support'],
-                popular: false,
-                color: '#c0c0c0'
-            },
-            {
-                id: 'pro',
-                name: 'Gold',
-                icon: 'fa-crown',
-                price: 5,
-                period: 'month',
-                features: ['50 listings', 'Popular badge', 'Priority support', 'Featured placement'],
-                popular: true,
-                color: '#d4af37'
-            },
-            {
-                id: 'developer',
-                name: 'Platinum',
-                icon: 'fa-gem',
-                price: 10,
-                period: 'month',
-                features: ['Unlimited listings', 'Premium badge', 'API access', 'Top ranking', 'Bulk upload'],
-                popular: false,
-                color: '#e5e4e2'
-            }
-        ],
-        weekly: [
-            {
-                id: 'basic',
-                name: 'Silver',
-                icon: 'fa-star',
-                price: 700,
-                period: 'week',
-                features: ['20 listings', '📊 Basic analytics', 'Email support', 'WhatsApp leads'],
-                popular: false,
-                color: '#c0c0c0'
-            },
-            {
-                id: 'pro',
-                name: 'Gold',
-                icon: 'fa-gem',
-                price: 1400,
-                period: 'week',
-                features: ['Unlimited listings', '📊 Advanced analytics', 'Priority support', 'WhatsApp leads', '⭐ Featured placement'],
-                popular: true,
-                color: '#d4af37'
-            },
-            {
-                id: 'developer',
-                name: 'Platinum',
-                icon: 'fa-crown',
-                price: 2800,
-                period: 'week',
-                features: ['Unlimited listings', '📊 Premium analytics', '24/7 priority support', 'WhatsApp leads', '⭐ Featured placement', '🔌 API access', '📦 Bulk upload'],
-                popular: false,
-                color: '#e5e4e2'
-            }
-        ]
-    };
+   const PACKAGES = {
+  monthly: [
+    {
+      id: 'free',
+      name: 'Bronze',
+      icon: 'fa-shield',
+      price: 0,
+      period: 'month',
+      features: ['1 listing', 'Standard visibility', '14-day listing expiry'],
+      popular: false,
+      color: '#cd7f32',
+      trial: true
+    },
+    {
+      id: 'basic',
+      name: 'Silver',
+      icon: 'fa-gem',
+      price: 999,
+      period: 'month',
+      features: ['10 listings', 'Basic boost', 'WhatsApp leads', 'Email support'],
+      popular: false,
+      color: '#c0c0c0'
+    },
+    {
+      id: 'pro',
+      name: 'Gold',
+      icon: 'fa-crown',
+      price: 1999,
+      period: 'month',
+      features: ['30 listings', 'Popular badge', 'Priority support', '2 Featured slots'],
+      popular: true,
+      color: '#d4af37'
+    },
+    {
+      id: 'developer',
+      name: 'Platinum',
+      icon: 'fa-gem',
+      price: 3999,
+      period: 'month',
+      features: ['Unlimited listings', 'Premium badge', '5 Featured slots', 'Top ranking', 'Bulk upload'],
+      popular: false,
+      color: '#e5e4e2'
+    }
+  ],
+  quarterly: [
+    {
+      id: 'basic',
+      name: 'Silver',
+      icon: 'fa-gem',
+      price: 2499,
+      period: 'quarter',
+      features: ['10 listings', 'Basic boost', 'WhatsApp leads', 'Save KES 500'],
+      popular: false,
+      color: '#c0c0c0'
+    },
+    {
+      id: 'pro',
+      name: 'Gold',
+      icon: 'fa-crown',
+      price: 4999,
+      period: 'quarter',
+      features: ['30 listings', 'Popular badge', 'Priority support', 'Save KES 1,000'],
+      popular: true,
+      color: '#d4af37'
+    },
+    {
+      id: 'developer',
+      name: 'Platinum',
+      icon: 'fa-gem',
+      price: 9999,
+      period: 'quarter',
+      features: ['Unlimited listings', 'Premium badge', '5 Featured slots', 'Save KES 2,000'],
+      popular: false,
+      color: '#e5e4e2'
+    }
+  ]
+};
 
     let currentPeriod = 'monthly';
 
