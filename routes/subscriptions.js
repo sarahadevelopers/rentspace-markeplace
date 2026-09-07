@@ -11,15 +11,15 @@ const { sendSubscriptionConfirmationEmail } = require('../config/email');
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
   free: { 
-    name: 'Bronze',        // ← New display name
+    name: 'Bronze',
     listings: 2, 
-    price: 0,              // Keep 0 for trial, or set to 500 for paid
+    price: 0,
     featured: false, 
     analytics: false, 
     badge: false 
   },
   basic: { 
-    name: 'Silver',        // ← New display name
+    name: 'Silver',
     listings: 20, 
     price: 2, 
     featured: false, 
@@ -27,7 +27,7 @@ const PLANS = {
     badge: false 
   },
   pro: { 
-    name: 'Gold',          // ← New display name
+    name: 'Gold',
     listings: 50, 
     price: 5, 
     featured: true, 
@@ -35,7 +35,7 @@ const PLANS = {
     badge: true 
   },
   developer: { 
-    name: 'Platinum',      // ← New display name
+    name: 'Platinum',
     listings: Infinity, 
     price: 10, 
     featured: true, 
@@ -43,6 +43,7 @@ const PLANS = {
     badge: true 
   }
 };
+
 // ─── Helper: Check if user has an active subscription ──────────
 function hasActiveSubscription(user) {
   if (!user.subscriptionPlan || user.subscriptionPlan === 'free') return false;
@@ -88,7 +89,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     if (amount === 0) {
       user.subscriptionPlan = plan;
       user.subscriptionExpiry = null;
-      user.trialStartDate = user.trialStartDate || new Date(); // Preserve trial date
+      user.trialStartDate = user.trialStartDate || new Date();
       await user.save();
 
       const subscription = new Subscription({
@@ -154,22 +155,35 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       }
     );
 
-    // ─── Store checkout ID from proxy response ────────────────
-   // ─── Store checkout ID from proxy response ────────────────
-const checkoutId = response.data.checkoutId || response.data.checkout_id || response.data.id;
-subscription.metadata = {
-  ...subscription.metadata,
-  checkout_id: checkoutId,
-  intasendResponse: response.data,
-  initiatedAt: new Date()
-};
-await subscription.save();
+    // 🔍 Debug: Log the entire proxy response
+    console.log('📤 Proxy response data:', JSON.stringify(response.data, null, 2));
+
+    // ─── Store checkout ID, api_ref, and other metadata ────────
+    // Try multiple possible field names from the proxy response
+    const checkoutId = response.data.checkoutId || response.data.checkout_id || response.data.id || response.data.invoice_id;
+    const apiRef = response.data.api_ref || response.data.reference || response.data.transactionRef || null;
+
+    // If checkoutId is still missing, log a warning and use transactionRef as fallback
+    if (!checkoutId) {
+      console.warn('⚠️ No checkout_id found in proxy response. Using transactionRef as fallback.');
+    }
+
+    subscription.metadata = {
+      ...subscription.metadata,
+      checkout_id: checkoutId || transactionRef,  // fallback to transactionRef
+      api_ref: apiRef,
+      intasendResponse: response.data,
+      initiatedAt: new Date()
+    };
+    await subscription.save();
+
+    console.log(`✅ Subscription ${transactionRef} created with checkout_id: ${checkoutId || 'NOT_FOUND'}`);
 
     res.json({
       success: true,
       message: 'STK push initiated. Check your phone for M-Pesa prompt.',
       transactionRef,
-      checkoutId: response.data.checkoutId
+      checkoutId: checkoutId || transactionRef
     });
 
   } catch (error) {
@@ -227,7 +241,6 @@ router.post('/payment-callback', async (req, res) => {
       // ── Update user ──────────────────────────────────────────
       const user = await User.findById(userId);
       if (user) {
-        // Store previous plan for reference
         const previousPlan = user.subscriptionPlan;
 
         // Update user's subscription
@@ -371,7 +384,6 @@ router.get('/status', authMiddleware, async (req, res) => {
         isActive,
         expiresAt: user.subscriptionExpiry,
         trialStartDate: user.trialStartDate,
-        // Calculate days remaining if active
         daysRemaining: isActive && user.subscriptionExpiry
           ? Math.max(0, Math.ceil((new Date(user.subscriptionExpiry) - new Date()) / (1000 * 60 * 60 * 24)))
           : 0
