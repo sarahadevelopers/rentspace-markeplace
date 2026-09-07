@@ -147,23 +147,28 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
         }
 
         container.innerHTML = properties.map(prop => {
-            // ─── Determine the badge ──────────────────────────────
+            // ─── Determine the badge (subscription tiers + listing types) ──────────────
             let badge = '';
             let badgeClass = '';
 
+            // 1. Manual featured override – highest priority
             if (prop.featured) {
                 badge = '⭐ Featured';
                 badgeClass = 'featured';
-            } else if (prop.ownerSubscriptionPlan === 'developer') {
-                badge = '🏆 Premium';
-                badgeClass = 'premium';
+            }
+            // 2. Subscription plan badges – using metallic names
+            else if (prop.ownerSubscriptionPlan === 'developer') {
+                badge = '💎 Platinum';
+                badgeClass = 'platinum';
             } else if (prop.ownerSubscriptionPlan === 'pro') {
-                badge = '🔥 Popular';
-                badgeClass = 'popular';
+                badge = '🏅 Gold';
+                badgeClass = 'gold';
             } else if (prop.ownerSubscriptionPlan === 'basic') {
-                badge = '📌 Listed';
-                badgeClass = 'basic';
-            } else if (prop.listingType === 'rent') {
+                badge = '🥈 Silver';
+                badgeClass = 'silver';
+            }
+            // 3. Listing type fallback (free users or no subscription)
+            else if (prop.listingType === 'rent') {
                 badge = 'For Rent';
                 badgeClass = 'rent';
             } else if (prop.listingType === 'sale') {
@@ -222,15 +227,6 @@ async function loadPropertyGrid(containerId, filter = {}, limit = 8) {
 }
 
 // ========== HELPERS ==========
-function shuffleArray(array) {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-}
-
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>]/g, function(m) {

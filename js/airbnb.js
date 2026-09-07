@@ -211,7 +211,7 @@
             }
         }
 
-        // ========== LOAD SHORT-STAY (AIRBNB) RECOMMENDATIONS FROM RENDER API ==========
+        // ========== LOAD SHORT-STAY (AIRBNB) RECOMMENDATIONS WITH BADGES ==========
         async function loadAirbnbRecommendations() {
             const container = document.getElementById('airbnbGrid');
             if (!container) return;
@@ -245,9 +245,28 @@
                             const nightly = prop.priceNight || Math.round(prop.price / 30);
                             const rating = prop.airbnb_rating || '4.9';
                             const reviews = prop.airbnb_reviews || 25;
+
+                            // ─── SUBSCRIPTION BADGE ──────────────────────────────
+                            const plan = prop.ownerSubscriptionPlan || 'free';
+                            const badgeConfig = {
+                                basic: { label: 'Silver', color: '#c0c0c0', icon: 'fa-gem', className: 'badge-silver' },
+                                pro: { label: 'Gold', color: '#d4af37', icon: 'fa-crown', className: 'badge-gold' },
+                                developer: { label: 'Platinum', color: '#e5e4e2', icon: 'fa-gem', className: 'badge-platinum' }
+                            };
+                            const config = badgeConfig[plan] || null;
+                            let premiumBadgeHTML = '';
+                            if (config) {
+                                premiumBadgeHTML = `
+                                    <div class="property-badge ${config.className}" style="position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.6); padding:2px 10px; border-radius:12px; font-size:10px; color:${config.color}; border:1px solid ${config.color}40; z-index:5; backdrop-filter:blur(4px);">
+                                        <i class="fas ${config.icon}"></i> ${config.label}
+                                    </div>
+                                `;
+                            }
+
                             return `
-                            <a href="${basePath}/airbnb/${prop.slug}.html" class="airbnb-card">
-                                <div class="airbnb-card-image">
+                            <a href="${basePath}/airbnb/${prop.slug}.html" class="airbnb-card" style="position:relative;">
+                                <div class="airbnb-card-image" style="position:relative;">
+                                    ${premiumBadgeHTML}
                                     <img src="${prop.images?.[0] || `${basePath}/images/placeholder.jpg`}" alt="${escapeHtml(prop.title)}" loading="lazy">
                                     <span class="airbnb-badge"><i class="fab fa-airbnb"></i> Short-stay</span>
                                 </div>
@@ -280,46 +299,47 @@
             }
         }
 
-        // ========== LOAD RELATED BLOG POSTS FROM posts.json (still local, but you could later migrate to API) ==========
-      async function loadRelatedPosts() {
-  const container = document.getElementById('relatedPosts');
-  if (!container) return;
-  try {
-    const currentSlug = window.location.pathname.split('/').pop().replace('.html', '');
-    
-    // First get the current post to know its category
-    const currentRes = await fetch(`${API_BASE}/posts/${currentSlug}`);
-    if (!currentRes.ok) throw new Error('Current post not found');
-    const currentData = await currentRes.json();
-    const currentPost = currentData.post;
-    
-    if (currentPost && currentPost.category) {
-      // Fetch related posts by category
-      const relatedRes = await fetch(`${API_BASE}/posts?category=${currentPost.category}&limit=4`);
-      const relatedData = await relatedRes.json();
-      const related = relatedData.posts.filter(p => p.slug !== currentSlug).slice(0, 3);
-      
-      if (related.length === 0) {
-        container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--text-muted);">More articles coming soon.</p>';
-      } else {
-        container.innerHTML = related.map(post => `
-          <a href="${basePath}/blog/${post.slug}.html" style="text-decoration:none;">
-            <img src="${post.image}" alt="${post.title}" style="width:100%; height:150px; object-fit:cover; border-radius:12px;">
-            <div style="padding:12px 0;">
-              <h4 style="font-size:14px; font-weight:500; color:var(--text-primary);">${escapeHtml(post.title)}</h4>
-              <p style="font-size:11px; color:var(--text-muted);">${post.date}</p>
-            </div>
-          </a>
-        `).join('');
-      }
-    } else {
-      container.innerHTML = '<p style="grid-column:1/-1; text-align:center;">No related posts found.</p>';
-    }
-  } catch (err) {
-    console.warn('Related posts error:', err);
-    container.innerHTML = '<p style="grid-column:1/-1; text-align:center;">Could not load related posts.</p>';
-  }
-}
+        // ========== LOAD RELATED BLOG POSTS ==========
+        async function loadRelatedPosts() {
+            const container = document.getElementById('relatedPosts');
+            if (!container) return;
+            try {
+                const currentSlug = window.location.pathname.split('/').pop().replace('.html', '');
+
+                // First get the current post to know its category
+                const currentRes = await fetch(`${API_BASE}/posts/${currentSlug}`);
+                if (!currentRes.ok) throw new Error('Current post not found');
+                const currentData = await currentRes.json();
+                const currentPost = currentData.post;
+
+                if (currentPost && currentPost.category) {
+                    // Fetch related posts by category
+                    const relatedRes = await fetch(`${API_BASE}/posts?category=${currentPost.category}&limit=4`);
+                    const relatedData = await relatedRes.json();
+                    const related = relatedData.posts.filter(p => p.slug !== currentSlug).slice(0, 3);
+
+                    if (related.length === 0) {
+                        container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--text-muted);">More articles coming soon.</p>';
+                    } else {
+                        container.innerHTML = related.map(post => `
+                            <a href="${basePath}/blog/${post.slug}.html" style="text-decoration:none;">
+                                <img src="${post.image}" alt="${post.title}" style="width:100%; height:150px; object-fit:cover; border-radius:12px;">
+                                <div style="padding:12px 0;">
+                                    <h4 style="font-size:14px; font-weight:500; color:var(--text-primary);">${escapeHtml(post.title)}</h4>
+                                    <p style="font-size:11px; color:var(--text-muted);">${post.date}</p>
+                                </div>
+                            </a>
+                        `).join('');
+                    }
+                } else {
+                    container.innerHTML = '<p style="grid-column:1/-1; text-align:center;">No related posts found.</p>';
+                }
+            } catch (err) {
+                console.warn('Related posts error:', err);
+                container.innerHTML = '<p style="grid-column:1/-1; text-align:center;">Could not load related posts.</p>';
+            }
+        }
+
         // Initialize all blog features
         loadPropertyRecommendations();
         loadAirbnbRecommendations();

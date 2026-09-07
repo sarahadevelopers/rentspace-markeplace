@@ -284,36 +284,55 @@ function renderProperties() {
         propertyImagesMap.set(prop.id, images);
     });
     
-    propertyGrid.innerHTML = paginatedProperties.map(prop => {
-        const images = propertyImagesMap.get(prop.id) || [prop.images?.[0] || '/images/placeholder.jpg'];
-        const firstImage = images[0];
-        
-        // Determine land type label
-        let landType = 'Land';
-        if (prop.propertyType && prop.propertyType.includes('comm')) landType = 'Commercial';
-        else if (prop.propertyType && prop.propertyType.includes('res')) landType = 'Residential';
-        else if (prop.propertyType && prop.propertyType.includes('ranch')) landType = 'Agricultural';
-        
-        return `
-            <a href="${basePath}/property/${prop.slug}.html" class="property-card" data-property-id="${prop.id}">
-                <div class="card-image-wrapper">
-                    <img class="card-image" src="${firstImage}" alt="${prop.title}" loading="lazy">
-                    <div class="card-badge">${landType}</div>
-                    <div class="card-price">KES ${prop.price.toLocaleString()}</div>
-                </div>
-                <div class="card-info">
-                    <h3 class="card-title">${escapeHtml(prop.title)}</h3>
-                    <div class="card-location">${prop.estate || 'Nairobi'}</div>
-                    <div class="card-features">
-                        ${prop.size ? `<span><i class="fas fa-arrows-alt"></i> ${escapeHtml(prop.size)}</span>` : ''}
-                        ${prop.bedrooms ? `<span><i class="fas fa-bed"></i> ${prop.bedrooms}</span>` : ''}
-                        ${!prop.size && !prop.bedrooms ? '<span>View details</span>' : ''}
-                    </div>
-                </div>
-                <div class="card-cta">View Details</div>
-            </a>
+   propertyGrid.innerHTML = paginatedProperties.map(prop => {
+    const images = propertyImagesMap.get(prop.id) || [prop.images?.[0] || '/images/placeholder.jpg'];
+    const firstImage = images[0];
+    
+    // Determine land type label
+    let landType = 'Land';
+    if (prop.propertyType && prop.propertyType.includes('comm')) landType = 'Commercial';
+    else if (prop.propertyType && prop.propertyType.includes('res')) landType = 'Residential';
+    else if (prop.propertyType && prop.propertyType.includes('ranch')) landType = 'Agricultural';
+    
+    // ─── SUBSCRIPTION BADGE ──────────────────────────────────────
+    const plan = prop.ownerSubscriptionPlan || 'free';
+    const badgeConfig = {
+        basic: { label: 'Silver', color: '#c0c0c0', icon: 'fa-gem', className: 'badge-silver' },
+        pro: { label: 'Gold', color: '#d4af37', icon: 'fa-crown', className: 'badge-gold' },
+        developer: { label: 'Platinum', color: '#e5e4e2', icon: 'fa-gem', className: 'badge-platinum' }
+    };
+    const config = badgeConfig[plan] || null;
+    let premiumBadgeHTML = '';
+    if (config) {
+        premiumBadgeHTML = `
+            <div class="property-badge ${config.className}">
+                <i class="fas ${config.icon}"></i> ${config.label}
+            </div>
         `;
-    }).join('');
+    }
+    
+    return `
+        <a href="${basePath}/property/${prop.slug}.html" class="property-card" data-property-id="${prop.id}">
+            <div class="card-image-wrapper" style="position:relative;">
+                ${premiumBadgeHTML}
+                <img class="card-image" src="${firstImage}" alt="${prop.title}" loading="lazy">
+                <div class="card-badge">${landType}</div>
+                <div class="card-price">KES ${prop.price.toLocaleString()}</div>
+            </div>
+            <div class="card-info">
+                <h3 class="card-title">${escapeHtml(prop.title)}</h3>
+                <div class="card-location">${prop.estate || 'Nairobi'}</div>
+                <div class="card-features">
+                    ${prop.size ? `<span><i class="fas fa-arrows-alt"></i> ${escapeHtml(prop.size)}</span>` : ''}
+                    ${prop.bedrooms ? `<span><i class="fas fa-bed"></i> ${prop.bedrooms}</span>` : ''}
+                    ${!prop.size && !prop.bedrooms ? '<span>View details</span>' : ''}
+                </div>
+                ${config ? `<div class="boost-tag"><i class="fas fa-arrow-up" style="color:${config.color};"></i> <span style="color:${config.color};">Boosted visibility</span></div>` : ''}
+            </div>
+            <div class="card-cta">View Details</div>
+        </a>
+    `;
+}).join('');
     
     setTimeout(() => {
         paginatedProperties.forEach(prop => {
@@ -607,7 +626,8 @@ async function loadProperties() {
                 description: prop.description || '',
                 listingType: prop.listingType,
                 propertyType: prop.propertyType,
-                status: prop.status
+                status: prop.status,
+                ownerSubscriptionPlan: prop.ownerSubscriptionPlan || 'free'  // ✅ ADDED
             }))
             // 🔥 KEY FILTER: Only land properties
             .filter(prop => 

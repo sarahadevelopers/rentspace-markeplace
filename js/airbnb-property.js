@@ -1,10 +1,8 @@
 // ========== DYNAMIC PATH HELPER ==========
 const getBasePath = () => {
-    // GitHub Pages
     if (window.location.hostname === 'sarahadevelopers.github.io') {
         return '/rentspace-markeplace';
     }
-    // Local development
     return '';
 };
 const basePath = getBasePath();
@@ -96,12 +94,10 @@ let currentGuestsFilter = 'all';
 function applyAllFilters() {
     let filtered = [...allAirbnbProperties];
     
-    // Apply location filter
     if (currentLocationFilter !== 'all') {
         filtered = filtered.filter(p => p.estate === currentLocationFilter);
     }
     
-    // Apply price filter (nightly rate)
     if (currentPriceFilter !== 'all') {
         filtered = filtered.filter(p => {
             const nightPrice = p.priceNight || Math.round(p.price / 30);
@@ -114,7 +110,6 @@ function applyAllFilters() {
         });
     }
     
-    // Apply guests filter (assumes 2 guests per bedroom)
     if (currentGuestsFilter !== 'all') {
         const guestNum = parseInt(currentGuestsFilter);
         filtered = filtered.filter(p => {
@@ -132,7 +127,6 @@ function applyAllFilters() {
     if (resultSpan) resultSpan.textContent = currentFilteredProperties.length;
 }
 
-// ========== RENDER PROPERTY CARDS ==========
 // ========== RENDER PROPERTY CARDS ==========
 function renderProperties(properties) {
     const grid = document.getElementById('propertyGrid');
@@ -164,7 +158,6 @@ function renderProperties(properties) {
     const totalPages = Math.ceil(properties.length / itemsPerPage);
     
     grid.innerHTML = paginated.map(prop => {
-        // ===== FIXED: Use price directly as nightly rate =====
         const nightPrice = prop.price || 0;
         const rating = prop.airbnb_rating || '4.9';
         const reviews = prop.airbnb_reviews || 25;
@@ -196,7 +189,6 @@ function renderProperties(properties) {
         `;
     }).join('');
     
-    // Pagination
     if (totalPages <= 1) {
         if (paginationDiv) paginationDiv.style.display = 'none';
         return;
@@ -233,6 +225,7 @@ function renderProperties(properties) {
         });
     }
 }
+
 // ========== ESCAPE HTML HELPER ==========
 function escapeHtml(str) {
     if (!str) return '';
@@ -353,12 +346,10 @@ async function loadAirbnbProperties() {
         const response = await fetch(`${API_BASE}/properties?type=short_term&limit=200`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        // API returns { success, count, total, properties: [...] }
         allAirbnbProperties = data.properties || [];
         
         console.log(`✅ Found ${allAirbnbProperties.length} Airbnb properties from API`);
         
-        // Apply URL location filter if present
         const locationFromURL = getLocationFromURL();
         if (locationFromURL) {
             currentLocationFilter = locationFromURL;

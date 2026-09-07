@@ -5,7 +5,11 @@ const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const Property = require('../models/Property');
 const authMiddleware = require('../middleware/auth');
-const { sendVerificationEmail, sendPasswordResetEmail } = require('../config/email');
+const { 
+  sendVerificationEmail, 
+  sendPasswordResetEmail,
+  sendExpiredEmail   // ← ADD
+} = require('../config/email');
 
 const router = express.Router();
 
@@ -354,6 +358,7 @@ router.post('/reset-password', async (req, res) => {
 // =============================================================
 
 // ─── POST /api/auth/downgrade-expired ──────────────────────────
+// ─── POST /api/auth/downgrade-expired ──────────────────────────
 router.post('/downgrade-expired', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -379,6 +384,14 @@ router.post('/downgrade-expired', authMiddleware, async (req, res) => {
     );
 
     console.log(`✅ User ${user.email} auto-downgraded from ${previousPlan} to free (expired)`);
+
+    // ─── Send expired email notification ──────────────────────
+    try {
+      await sendExpiredEmail(user.email, user.name, previousPlan);
+      console.log(`✅ Expired email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send expired email:', emailError);
+    }
 
     res.json({
       success: true,

@@ -57,7 +57,7 @@ const userSchema = new mongoose.Schema({
     default: Date.now // For 30-day trial tracking
   },
 
-  // ─── Payment Receipt Tracking (optional) ───────────────
+  // ─── Payment Receipt Tracking ──────────────────────────
   mpesaReceipt: {
     type: String,
     default: null
@@ -65,6 +65,16 @@ const userSchema = new mongoose.Schema({
   transactionRef: {
     type: String,
     default: null
+  },
+
+  // ─── Email Reminder Tracking ────────────────────────────
+  lastReminderSent: {
+    type: Date,
+    default: null
+  },
+  expiredEmailSent: {
+    type: Boolean,
+    default: false
   },
 
   // ─── Reset Password ──────────────────────────────────────
