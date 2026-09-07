@@ -10,37 +10,37 @@ const { sendSubscriptionConfirmationEmail } = require('../config/email');
 
 // ─── Plan definitions ──────────────────────────────────────────
 const PLANS = {
-  free: { 
+  free: {
     name: 'Bronze',
-    listings: 2, 
+    listings: 2,
     price: 0,
-    featured: false, 
-    analytics: false, 
-    badge: false 
+    featured: false,
+    analytics: false,
+    badge: false
   },
-  basic: { 
+  basic: {
     name: 'Silver',
-    listings: 20, 
-    price: 2, 
-    featured: false, 
-    analytics: true, 
-    badge: false 
+    listings: 20,
+    price: 2,
+    featured: false,
+    analytics: true,
+    badge: false
   },
-  pro: { 
+  pro: {
     name: 'Gold',
-    listings: 50, 
-    price: 5, 
-    featured: true, 
-    analytics: true, 
-    badge: true 
+    listings: 50,
+    price: 5,
+    featured: true,
+    analytics: true,
+    badge: true
   },
-  developer: { 
+  developer: {
     name: 'Platinum',
-    listings: Infinity, 
-    price: 10, 
-    featured: true, 
-    analytics: true, 
-    badge: true 
+    listings: Infinity,
+    price: 10,
+    featured: true,
+    analytics: true,
+    badge: true
   }
 };
 
@@ -99,7 +99,8 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         paymentStatus: 'paid',
         transactionRef: `FREE-${uuidv4().slice(0, 8)}`,
         amount: 0,
-        renewalDate: null
+        renewalDate: null,
+        phone: null // no payment phone for free plan
       });
       await subscription.save();
 
@@ -120,6 +121,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     const transactionRef = `RENT-${uuidv4().slice(0, 8)}`;
     const renewalDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
+    // ✅ Store the payment phone directly on the subscription
     const subscription = new Subscription({
       userId,
       plan,
@@ -127,7 +129,8 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       paymentStatus: 'pending',
       transactionRef,
       amount,
-      renewalDate
+      renewalDate,
+      phone: phoneNumber // ✅ CRITICAL – allows webhook to find by phone
     });
     await subscription.save();
 
@@ -159,18 +162,16 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     console.log('📤 Proxy response data:', JSON.stringify(response.data, null, 2));
 
     // ─── Store checkout ID, api_ref, and other metadata ────────
-    // Try multiple possible field names from the proxy response
     const checkoutId = response.data.checkoutId || response.data.checkout_id || response.data.id || response.data.invoice_id;
     const apiRef = response.data.api_ref || response.data.reference || response.data.transactionRef || null;
 
-    // If checkoutId is still missing, log a warning and use transactionRef as fallback
     if (!checkoutId) {
       console.warn('⚠️ No checkout_id found in proxy response. Using transactionRef as fallback.');
     }
 
     subscription.metadata = {
       ...subscription.metadata,
-      checkout_id: checkoutId || transactionRef,  // fallback to transactionRef
+      checkout_id: checkoutId || transactionRef,
       api_ref: apiRef,
       intasendResponse: response.data,
       initiatedAt: new Date()

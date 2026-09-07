@@ -30,6 +30,10 @@ const subscriptionSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  phone: {                // ✅ NEW – stores the phone number used for payment
+    type: String,
+    default: null
+  },
   startDate: {
     type: Date,
     default: Date.now
@@ -54,6 +58,7 @@ const subscriptionSchema = new mongoose.Schema({
 subscriptionSchema.index({ userId: 1, status: 1 });
 subscriptionSchema.index({ transactionRef: 1 });
 subscriptionSchema.index({ status: 1, renewalDate: 1 });
+subscriptionSchema.index({ phone: 1, status: 1 }); // ✅ NEW – for webhook lookup by phone
 
 // ─── Instance method: check if subscription is active ──────
 subscriptionSchema.methods.isActive = function() {

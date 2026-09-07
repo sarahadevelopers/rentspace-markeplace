@@ -82,7 +82,7 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       if (subscription) console.log(`✅ Found subscription by checkout_id: ${checkout_id}`);
     }
 
-    // 2. Try by api_ref (stored in metadata) – NEW
+    // 2. Try by api_ref (stored in metadata)
     if (!subscription && reference) {
       subscription = await Subscription.findOne({
         'metadata.api_ref': reference
@@ -96,7 +96,16 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       if (subscription) console.log(`✅ Found subscription by transactionRef: ${reference}`);
     }
 
-    // 4. Fallback: phone-based lookup (legacy)
+    // ✅ 4. Try by payment phone (stored directly on subscription)
+    if (!subscription && phone) {
+      subscription = await Subscription.findOne({
+        phone: phone,
+        status: 'pending'
+      }).sort({ createdAt: -1 });
+      if (subscription) console.log(`✅ Found subscription by payment phone: ${phone}`);
+    }
+
+    // 5. Fallback: phone-based user lookup (legacy)
     if (!subscription && phone) {
       let userPhone = phone;
       let user = await User.findOne({ phone: userPhone });
@@ -113,12 +122,12 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
           userId: user._id,
           status: 'pending'
         }).sort({ createdAt: -1 });
-        if (subscription) console.log(`✅ Found subscription by phone fallback for user ${user.email}`);
+        if (subscription) console.log(`✅ Found subscription by user phone fallback for user ${user.email}`);
       }
     }
 
     if (!subscription) {
-      console.warn(`⚠️ No pending subscription found for checkout_id: ${checkout_id}, api_ref: ${reference}, or transactionRef: ${reference}`);
+      console.warn(`⚠️ No pending subscription found for checkout_id: ${checkout_id}, api_ref: ${reference}, transactionRef: ${reference}, or phone: ${phone}`);
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
