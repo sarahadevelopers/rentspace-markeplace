@@ -2308,6 +2308,53 @@ async function handleSubscription() {
         Utils.showToast(error.message, 'error');
     }
 }
+
+// =========================
+// Admin Link (only for admin users)
+// =========================
+function addAdminLink() {
+  const user = JSON.parse(localStorage.getItem('rentspace_user'));
+  if (!user || user.role !== 'admin') return;
+
+  const headerStats = document.querySelector('.header-stats');
+  if (!headerStats) return;
+
+  // Check if link already exists to avoid duplicates
+  if (document.querySelector('.admin-link')) return;
+
+  const adminLink = document.createElement('a');
+  adminLink.href = 'admin.html';
+  adminLink.className = 'admin-link';
+  adminLink.innerHTML = '<i class="fas fa-shield-alt"></i> Admin';
+  adminLink.style.cssText = `
+    background: rgba(197, 160, 89, 0.12);
+    color: #c5a059;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid rgba(197, 160, 89, 0.2);
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  `;
+  adminLink.addEventListener('mouseenter', () => {
+    adminLink.style.background = 'rgba(197, 160, 89, 0.2)';
+  });
+  adminLink.addEventListener('mouseleave', () => {
+    adminLink.style.background = 'rgba(197, 160, 89, 0.12)';
+  });
+
+  // Insert after the property count span
+  const propertySpan = headerStats.querySelector('span');
+  if (propertySpan) {
+    propertySpan.after(adminLink);
+  } else {
+    headerStats.prepend(adminLink);
+  }
+}
 // =========================
 // Initialization
 // =========================

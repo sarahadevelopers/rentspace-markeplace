@@ -10,6 +10,8 @@ const authRoutes = require('./routes/auth');
 const propertyRoutes = require('./routes/properties');
 const postRoutes = require('./routes/posts');
 const subscriptionRoutes = require('./routes/subscriptions');
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
 
 // Import models
 const User = require('./models/User');
