@@ -57,7 +57,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 
 // =============================================
-// Webhook from sarahapay-intasend (FULLY FIXED)
+// Webhook from sarahapay-intasend (FULLY FIXED + RENEWAL SUPPORT)
 // =============================================
 app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
   try {
@@ -181,12 +181,37 @@ app.post('/api/subscriptions/saraha-webhook', async (req, res) => {
       console.log(`✅ Subscription ${subscription.transactionRef} updated directly`);
     }
 
-    // ─── Step 5: Update the user document ──────────────────────
+    // ─── Step 5: Update the user document (with RENEWAL support) ──
+    // Get duration from subscription metadata (default 30 if not set)
+    const durationDays = subscription.metadata?.durationDays || 30;
+
+    // Determine current expiry (if any)
+    const currentExpiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+    const now = new Date();
+
+    // Compute new expiry: extend from max(currentExpiry, now)
+    let newExpiry;
+    if (currentExpiry && currentExpiry > now) {
+      // ✅ RENEWAL: extend from current expiry
+      newExpiry = new Date(currentExpiry.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      console.log(`🔄 Renewal: extending from ${currentExpiry.toISOString()} by ${durationDays} days`);
+    } else {
+      // ✅ NEW SUBSCRIPTION or EXPIRED: start from now
+      newExpiry = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      console.log(`🆕 New subscription: starting from now, ${durationDays} days`);
+    }
+
+    // Update user
     user.subscriptionPlan = planName;
-    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    user.subscriptionExpiry = newExpiry;
     user.mpesaReceipt = mpesa_receipt || reference;
     user.transactionRef = reference || checkout_id;
     await user.save();
+
+    // ✅ Also update the subscription's renewalDate to the new expiry
+    subscription.renewalDate = newExpiry;
+    await subscription.save();
+    console.log(`📅 Subscription expiry set to: ${newExpiry.toISOString()}`);
 
     // ─── Step 6: Update all properties owned by this user ──────
     await Property.updateMany(

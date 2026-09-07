@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
+const Property = require('../models/Property');
 const authMiddleware = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../config/email');
 
@@ -316,6 +317,7 @@ router.get('/verify-reset-token/:token', async (req, res) => {
 });
 
 // ─── Reset Password ──────────────────────────────────────────
+// ─── Reset Password ──────────────────────────────────────────
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
@@ -343,6 +345,48 @@ router.post('/reset-password', async (req, res) => {
     res.json({ success: true, message: 'Password reset successfully' });
   } catch (error) {
     console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// =============================================================
+// 🔐 SUBSCRIPTION DOWNGRADE (Auto-downgrade expired users)
+// =============================================================
+
+// ─── POST /api/auth/downgrade-expired ──────────────────────────
+router.post('/downgrade-expired', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only downgrade if expired
+    if (user.subscriptionExpiry && new Date(user.subscriptionExpiry) > new Date()) {
+      return res.status(400).json({ error: 'Subscription is still active' });
+    }
+
+    // ─── Downgrade user ──────────────────────────────────────────
+    const previousPlan = user.subscriptionPlan;
+    user.subscriptionPlan = 'free';
+    user.subscriptionExpiry = null;
+    await user.save();
+
+    // ─── Update all properties ──────────────────────────────────
+    await Property.updateMany(
+      { ownerId: user._id },
+      { $set: { ownerSubscriptionPlan: 'free' } }
+    );
+
+    console.log(`✅ User ${user.email} auto-downgraded from ${previousPlan} to free (expired)`);
+
+    res.json({
+      success: true,
+      message: 'Subscription expired. Downgraded to free plan.',
+      previousPlan
+    });
+  } catch (error) {
+    console.error('Downgrade error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

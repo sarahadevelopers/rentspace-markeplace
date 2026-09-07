@@ -51,6 +51,12 @@ function hasActiveSubscription(user) {
   return new Date(user.subscriptionExpiry) > new Date();
 }
 
+// ─── Helper: Get duration in days based on period ──────────────
+function getDurationDays(period) {
+  if (period === 'quarterly') return 90;
+  return 30; // default monthly
+}
+
 // ─── GET /api/subscriptions/plans ──────────────────────────────
 router.get('/plans', (req, res) => {
   res.json(PLANS);
@@ -59,7 +65,7 @@ router.get('/plans', (req, res) => {
 // ─── POST /api/subscriptions/subscribe ─────────────────────────
 router.post('/subscribe', authMiddleware, async (req, res) => {
   try {
-    const { plan, phoneNumber } = req.body;
+    const { plan, phoneNumber, period } = req.body; // period: 'monthly' or 'quarterly'
 
     // ─── Validate input ────────────────────────────────────────
     if (!plan || !PLANS[plan]) {
@@ -76,13 +82,16 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     const planData = PLANS[plan];
     const amount = planData.price;
 
+    // ─── Determine duration based on period ────────────────────
+    const durationDays = getDurationDays(period); // 30 or 90
+    const now = new Date();
+
     // ─── Check for existing active subscription ────────────────
     if (hasActiveSubscription(user)) {
-      return res.status(409).json({
-        error: 'You already have an active subscription. Manage it from your dashboard.',
-        currentPlan: user.subscriptionPlan,
-        expiresAt: user.subscriptionExpiry
-      });
+      // Allow renewal – do not block, but we'll handle it.
+      // We'll still allow the payment, and the webhook will extend from current expiry.
+      // No error – just proceed.
+      console.log(`🔄 Renewal requested for user ${user.email}`);
     }
 
     // ─── Free plan ──────────────────────────────────────────────
@@ -100,7 +109,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         transactionRef: `FREE-${uuidv4().slice(0, 8)}`,
         amount: 0,
         renewalDate: null,
-        phone: null // no payment phone for free plan
+        phone: null
       });
       await subscription.save();
 
@@ -119,9 +128,8 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
 
     // ─── Paid plan – forward to IntaSend payment service ──────
     const transactionRef = `RENT-${uuidv4().slice(0, 8)}`;
-    const renewalDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-    // ✅ Store the payment phone directly on the subscription
+    // ─── Create subscription (provisional, will be updated by webhook) ──
     const subscription = new Subscription({
       userId,
       plan,
@@ -129,15 +137,15 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       paymentStatus: 'pending',
       transactionRef,
       amount,
-      renewalDate,
-      phone: phoneNumber // ✅ CRITICAL – allows webhook to find by phone
+      phone: phoneNumber,
+      renewalDate: new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000) // provisional
     });
     await subscription.save();
 
     const intasendServiceUrl = process.env.INTASEND_SERVICE_URL || 'https://sarahapay-intasend.onrender.com';
     const callbackUrl = process.env.INTASEND_CALLBACK_URL || 'https://rentspace-markeplace.onrender.com/api/payment-callback';
 
-    // ─── Call sarahapay-intasend with ALL required fields ──
+    // ─── Call sarahapay-intasend ──────────────────────────────
     const response = await axios.post(
       `${intasendServiceUrl}/api/pay`,
       {
@@ -158,10 +166,9 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       }
     );
 
-    // 🔍 Debug: Log the entire proxy response
     console.log('📤 Proxy response data:', JSON.stringify(response.data, null, 2));
 
-    // ─── Store checkout ID, api_ref, and other metadata ────────
+    // ─── Store metadata with duration and period ──────────────
     const checkoutId = response.data.checkoutId || response.data.checkout_id || response.data.id || response.data.invoice_id;
     const apiRef = response.data.api_ref || response.data.reference || response.data.transactionRef || null;
 
@@ -173,6 +180,8 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       ...subscription.metadata,
       checkout_id: checkoutId || transactionRef,
       api_ref: apiRef,
+      durationDays: durationDays,        // ← STORE DURATION
+      period: period || 'monthly',       // ← STORE PERIOD
       intasendResponse: response.data,
       initiatedAt: new Date()
     };
@@ -204,7 +213,9 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
   }
 });
 
-// ─── POST /api/payment-callback (Called by IntaSend service) ──
+// ─── POST /api/payment-callback (Called by sarahapay-intasend) ──
+// This is the callback from the proxy – we keep it for backward compatibility.
+// The main webhook is in server.js, but this is also used.
 router.post('/payment-callback', async (req, res) => {
   try {
     const payload = req.body;
@@ -212,22 +223,19 @@ router.post('/payment-callback', async (req, res) => {
 
     console.log(`📥 Payment callback received: ${transactionRef} | ${status}`);
 
-    // ─── Find the subscription ──────────────────────────────────
     const subscription = await Subscription.findOne({ transactionRef });
     if (!subscription) {
       console.warn(`⚠️ No subscription found for ref: ${transactionRef}`);
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
-    // ─── Only process if still pending ──────────────────────────
     if (subscription.status !== 'pending') {
       console.log(`⏭️ Subscription ${transactionRef} already processed (status: ${subscription.status})`);
       return res.status(200).send('OK');
     }
 
-    // ─── Handle successful payment ──────────────────────────────
     if (status === 'completed' || status === 'COMPLETE' || status === 'success') {
-      // ── Update subscription ──────────────────────────────────
+      // Update subscription
       subscription.status = 'active';
       subscription.paymentStatus = 'paid';
       subscription.metadata = {
@@ -239,66 +247,56 @@ router.post('/payment-callback', async (req, res) => {
       };
       await subscription.save();
 
-      // ── Update user ──────────────────────────────────────────
+      // Update user with renewal logic
       const user = await User.findById(userId);
       if (user) {
         const previousPlan = user.subscriptionPlan;
+        const durationDays = subscription.metadata?.durationDays || 30;
 
-        // Update user's subscription
-        user.subscriptionPlan = plan;
-        user.subscriptionExpiry = subscription.renewalDate;
-
-        // Ensure trial start date is set (for new users)
-        if (!user.trialStartDate) {
-          user.trialStartDate = new Date();
+        // Compute new expiry: extend from current expiry or from now
+        const currentExpiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        const now = new Date();
+        let newExpiry;
+        if (currentExpiry && currentExpiry > now) {
+          // Renewal: extend from current expiry
+          newExpiry = new Date(currentExpiry.getTime() + durationDays * 24 * 60 * 60 * 1000);
+        } else {
+          newExpiry = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
         }
 
+        user.subscriptionPlan = plan;
+        user.subscriptionExpiry = newExpiry;
+        user.mpesaReceipt = mpesaReceipt;
+        user.transactionRef = transactionRef;
         await user.save();
 
-        // ── Update all properties owned by this user ──────────
+        // Update properties
         await Property.updateMany(
           { ownerId: user._id },
           { $set: { ownerSubscriptionPlan: plan } }
         );
 
-        console.log(`✅ User ${user.email} upgraded from ${previousPlan || 'free'} to ${plan} via callback`);
+        console.log(`✅ User ${user.email} upgraded from ${previousPlan || 'free'} to ${plan} via callback (expiry: ${newExpiry.toISOString()})`);
 
-        // ── Send confirmation email ────────────────────────────
         try {
-          await sendSubscriptionConfirmationEmail(
-            user.email,
-            user.name || 'User',
-            plan,
-            subscription.amount
-          );
+          await sendSubscriptionConfirmationEmail(user.email, user.name, plan, subscription.amount);
           console.log(`✅ Confirmation email sent to ${user.email}`);
         } catch (emailError) {
           console.error('Email error:', emailError);
         }
       } else {
-        console.warn(`⚠️ User ${userId} not found for subscription ${transactionRef}`);
+        console.warn(`⚠️ User ${userId} not found`);
       }
-
     } else {
-      // ─── Payment failed ───────────────────────────────────────
       subscription.status = 'cancelled';
       subscription.paymentStatus = 'failed';
-      subscription.metadata = {
-        ...subscription.metadata,
-        failedAt: new Date(),
-        failureReason: status || 'Unknown',
-        callbackPayload: payload
-      };
       await subscription.save();
-      console.log(`❌ Payment failed for ${transactionRef} (status: ${status})`);
+      console.log(`❌ Payment failed for ${transactionRef}`);
     }
 
-    // ─── Always respond 200 to acknowledge ──────────────────────
     res.status(200).send('OK');
-
   } catch (error) {
     console.error('❌ Payment callback error:', error);
-    console.error('❌ Stack:', error.stack);
     res.status(500).json({ error: 'Callback processing failed' });
   }
 });
@@ -331,7 +329,6 @@ router.post('/verify-payment', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'M-Pesa receipt number required' });
     }
 
-    // ─── Activate subscription ──────────────────────────────────
     subscription.status = 'active';
     subscription.paymentStatus = 'paid';
     subscription.metadata = {
@@ -345,8 +342,18 @@ router.post('/verify-payment', authMiddleware, async (req, res) => {
     const user = await User.findById(subscription.userId);
     if (user) {
       const previousPlan = user.subscriptionPlan;
+      const durationDays = subscription.metadata?.durationDays || 30;
+      const currentExpiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+      const now = new Date();
+      let newExpiry;
+      if (currentExpiry && currentExpiry > now) {
+        newExpiry = new Date(currentExpiry.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      } else {
+        newExpiry = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      }
+
       user.subscriptionPlan = subscription.plan;
-      user.subscriptionExpiry = subscription.renewalDate;
+      user.subscriptionExpiry = newExpiry;
       await user.save();
 
       await Property.updateMany(
@@ -354,7 +361,7 @@ router.post('/verify-payment', authMiddleware, async (req, res) => {
         { $set: { ownerSubscriptionPlan: subscription.plan } }
       );
 
-      console.log(`✅ User ${user.email} upgraded from ${previousPlan || 'free'} to ${subscription.plan} via manual verification`);
+      console.log(`✅ User ${user.email} upgraded via manual verification (expiry: ${newExpiry.toISOString()})`);
     }
 
     res.json({

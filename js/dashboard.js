@@ -1262,21 +1262,113 @@ const ImageModal = {
 // Refresh User Data
 // =========================
 async function refreshUserData() {
-    try {
-        const token = getToken();
-        if (!token) return;
-        const res = await fetch(`${API_BASE}/api/auth/me`, {
+  try {
+    const token = getToken();
+    if (!token) return;
+
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const user = data.user || data;
+
+      // ─── Check if subscription has expired ──────────────────────
+      if (user.subscriptionPlan && user.subscriptionPlan !== 'free') {
+        const expiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+        if (expiry && expiry < new Date()) {
+          // ── Expired – downgrade to free ────────────────────────
+          console.log(`⏳ Subscription expired for ${user.email}. Downgrading to free.`);
+          
+          // Call the downgrade endpoint
+          await fetch(`${API_BASE}/api/auth/downgrade-expired`, {
+            method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            const user = data.user || data;
-            localStorage.setItem('rentspace_user', JSON.stringify(user));
+          });
+
+          // Refresh user data again after downgrade
+          const freshRes = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (freshRes.ok) {
+            const freshData = await freshRes.json();
+            const freshUser = freshData.user || freshData;
+            localStorage.setItem('rentspace_user', JSON.stringify(freshUser));
             await loadSubscriptionData();
+            Utils.showToast('⚠️ Your subscription has expired. You\'ve been downgraded to Bronze.', 'warning');
+            return;
+          }
         }
-    } catch (error) {
-        console.error('Failed to refresh user data:', error);
+      }
+
+      // ─── Save user data ──────────────────────────────────────────
+      localStorage.setItem('rentspace_user', JSON.stringify(user));
+      await loadSubscriptionData();
+
+      // ─── Check for expiry warning banner ──────────────────────
+      checkExpiryWarning(user);
     }
+  } catch (error) {
+    console.error('Failed to refresh user data:', error);
+  }
+}
+
+function checkExpiryWarning(user) {
+  const expiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+  if (!expiry || user.subscriptionPlan === 'free') {
+    // Hide any existing warning banner
+    const banner = document.getElementById('expiryWarningBanner');
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+
+  const now = new Date();
+  const daysRemaining = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+
+  const banner = document.getElementById('expiryWarningBanner') || createExpiryBanner();
+
+  if (daysRemaining <= 3 && daysRemaining > 0) {
+    // ─── Show warning banner ──────────────────────────────────────
+    banner.style.display = 'block';
+    banner.innerHTML = `
+      <div class="expiry-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 8px; padding: 12px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <i class="fas fa-exclamation-triangle" style="color: #ffc107; margin-right: 10px;"></i>
+          <span style="color: #fff;">⚠️ Your <strong>${PLAN_DISPLAY_MAP[user.subscriptionPlan] || user.subscriptionPlan}</strong> plan expires in <strong>${daysRemaining} day${daysRemaining > 1 ? 's' : ''}</strong>. 
+          <span style="color: #aaa;">Renew now to keep your listings live!</span></span>
+        </div>
+        <a href="#" onclick="openUpgradeModal(); return false;" style="background: #ffc107; color: #000; padding: 6px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          Renew Now
+        </a>
+      </div>
+    `;
+  } else if (daysRemaining <= 0) {
+    // ─── Subscription expired – show expired banner ──────────────
+    banner.style.display = 'block';
+    banner.innerHTML = `
+      <div class="expiry-warning" style="background: rgba(220, 53, 69, 0.1); border: 1px solid #dc3545; border-radius: 8px; padding: 12px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i>
+          <span style="color: #fff;">❌ Your <strong>${PLAN_DISPLAY_MAP[user.subscriptionPlan] || user.subscriptionPlan}</strong> plan has expired. Your listings are now hidden from search results.</span>
+        </div>
+        <a href="#" onclick="openUpgradeModal(); return false;" style="background: #dc3545; color: #fff; padding: 6px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          Reactivate Now
+        </a>
+      </div>
+    `;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function createExpiryBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'expiryWarningBanner';
+  // Insert after subscription card or at top of container
+  const container = document.querySelector('.admin-container') || document.body;
+  container.prepend(banner);
+  return banner;
 }
 
 // =========================
@@ -2037,7 +2129,9 @@ async function handleSubscription() {
         Utils.showToast('Please select a plan.', 'error');
         return;
     }
+    
     const plan = selected.dataset.plan;
+    const period = selected.dataset.period || 'monthly'; // ✅ GET PERIOD
     const rawPhone = document.getElementById('subscribePhone').value.trim();
 
     if (!rawPhone) {
@@ -2070,24 +2164,36 @@ async function handleSubscription() {
 
     try {
         const token = getToken();
+        
+        // ✅ SEND PERIOD TO BACKEND
         const res = await fetch(`${API_BASE}/api/subscriptions/subscribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ plan, phoneNumber: phone })
+            body: JSON.stringify({ 
+                plan, 
+                phoneNumber: phone,
+                period: period   // ✅ ADDED
+            })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Subscription failed');
 
         // ─── Replace modal content with loading spinner ──────────
+        const planDisplayName = PLAN_DISPLAY_MAP[plan] || plan.charAt(0).toUpperCase() + plan.slice(1);
+        const periodLabel = period === 'quarterly' ? 'Quarterly' : 'Monthly';
+        
         planList.innerHTML = `
             <div style="text-align:center; padding:40px 20px;">
                 <i class="fas fa-spinner fa-spin" style="font-size:48px; color:#c5a059; margin-bottom:20px; display:block;"></i>
                 <h3 style="color:#fff; margin-bottom:8px;">STK Push Sent</h3>
                 <p style="color:#aaa; font-size:15px;">Check your phone and enter your M‑Pesa PIN.</p>
-                <p style="color:#888; font-size:13px; margin-top:8px;">Waiting for payment confirmation...</p>
+                <p style="color:#888; font-size:13px; margin-top:8px;">
+                    ${planDisplayName} (${periodLabel}) – Waiting for payment confirmation...
+                </p>
                 <div style="margin-top:20px; width:100%; max-width:200px; margin-left:auto; margin-right:auto; height:4px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
                     <div style="width:0%; height:100%; background:linear-gradient(90deg, #c5a059, #d4b37a); border-radius:4px; animation: loadingBar 30s ease-in-out forwards;"></div>
                 </div>
+                <p style="color:#666; font-size:11px; margin-top:12px;" id="pollingStatus">⏳ Waiting for payment...</p>
             </div>
         `;
 
@@ -2095,10 +2201,17 @@ async function handleSubscription() {
         let attempts = 0;
         const maxAttempts = 15; // 15 * 2s = 30 seconds
         let subscriptionConfirmed = false;
+        const statusEl = document.getElementById('pollingStatus');
 
         while (attempts < maxAttempts && !subscriptionConfirmed) {
             attempts++;
             await new Promise(r => setTimeout(r, 2000));
+
+            // Update status message
+            if (statusEl) {
+                const dots = '.'.repeat(attempts % 4);
+                statusEl.textContent = `⏳ Waiting for payment confirmation${dots}`;
+            }
 
             try {
                 const token = getToken();
@@ -2124,6 +2237,7 @@ async function handleSubscription() {
                                 <i class="fas fa-check-circle" style="font-size:48px; color:#4CAF50; margin-bottom:20px; display:block;"></i>
                                 <h3 style="color:#fff; margin-bottom:8px;">✅ ${PLAN_DISPLAY_MAP[currentPlan] || currentPlan} Plan Activated!</h3>
                                 <p style="color:#aaa; font-size:15px;">Your subscription is now active.</p>
+                                <p style="color:#888; font-size:13px; margin-top:4px;">${periodLabel} plan – expires in ${period === 'quarterly' ? '90' : '30'} days.</p>
                             </div>
                         `;
 
